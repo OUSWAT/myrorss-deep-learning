@@ -15,7 +15,7 @@ import subprocess as sp
 import time
 import calendar
 import numpy as np
-import netCDF4
+#import netCDF4
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 
