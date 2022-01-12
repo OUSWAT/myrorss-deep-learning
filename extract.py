@@ -22,13 +22,6 @@ DATA_HOME = '/condo/swatcommon/common/myrorss'
 date1 = sys.argv[1]
 date2 = sys.argv[2]
 
-
-def getCases(year):
-    # loop through a year and return the casedates for that year
-    for subdir, dirs, files in os.walk(DATA_HOME+'/'+year)
-        print(subdir)
-        sys.exit()
-
 def extract(startdate, enddate, inloc, outloc):
 
     startepoch = calendar.timegm((int(startdate[0:4]), int(startdate[4:6]), int(startdate[6:8]), 12, 00, 00))
@@ -75,33 +68,19 @@ def percentages(hrfile, totalfile):
 
 def main():
 
-    # args = sys.argv
-    # startdate = args[1] # YYYYMMDD
-    # enddate = args[2]
-    # proc = args[3]
+    startdate = date1 # dates are input from shipExtract.sh
+    enddate = date2
 
-    # LOOP THROUGH GIVEN RANGE OF DATE FILESr
-    cases = getCases(str(2011))    
-
-
-    startdate = ''
-    enddate = '20110310'
     proc = 'EXTRACT'
 
     inloc = '/condo/swatcommon/common/myrorss' + startdate[0:4]
     outloc = '/scratch/mcmontalbano/myrorss/' + startdate[0:4] 
 
     if proc == 'EXTRACT':
-
         extract(startdate, enddate, inloc, outloc)
 
     if proc == 'ACCUMULATE':
-
         accumulate(startdate, enddate, inloc, outloc)
-
-
-
-
 
 if __name__ == "__main__":
     main()

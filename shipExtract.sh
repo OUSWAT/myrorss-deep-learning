@@ -7,7 +7,7 @@
 #SBATCH -t 01:00:00
 
 
-echo "Running Extract: $STARTDATE"
+echo "Start-date: $STARTDATE"
 echo "End-date: $ENDDATE"
 python Extract.py $STARTDATE $ENDDATE
 
