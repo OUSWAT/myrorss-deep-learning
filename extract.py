@@ -8,7 +8,6 @@
 #
 #############################################
 
-
 import os, sys, datetime
 import pandas as pd
 import subprocess as sp
@@ -17,8 +16,8 @@ import calendar
 import numpy as np
 #import netCDF4
 
-DATA_HOME = '/condo/swatcommon/common/myrorss/'
-OUT_HOME = '/lscratch/mcmontalbano/myrorss/'
+DATA_HOME = '/condo/swatcommon/common/myrorss'
+OUT_HOME = '/scratch/mcmontalbano/myrorss'
 
 # fields to extract/manipulate
 fields = ['MESH']
@@ -27,8 +26,8 @@ def get_cases(year = '1998'):
     # given a year, return the cases
     # step through directory 
     cases = []
-    for subdir, dirs, files in os.walk('{}/{}'.formaty(DATA_HOME,year):
-        for file in files:
+    for subdir, dirs, files in os.walk('{}/{}'.format(DATA_HOME,year)):
+        for file in sorted(files):
             cases.append(file[:8])    
     return cases
 
@@ -54,9 +53,11 @@ def extract_py(days):
     # extract loop
     # feed it a list of days to extract
     for day in days:
+        year = day[:4]
+        os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
         # iterate over fields
         for field in fields:
-            os.system('tar -xvf {}.tar -C {} --wildcards "{}"'.format(day, OUT_HOME,field))
+            os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
 
 def accumulate(startdate, enddate, inloc, outloc, interval):
 
@@ -87,8 +88,8 @@ def shell_loop():
 def main():
 
     process = 'extract'
-    year = sys.argv[1]
-
+    #year = sys.argv[1]
+    year = '1998'
     # extract first 10 cases of the year (b1 to b2)
     b1 = 0
     b2 = 10
@@ -100,7 +101,7 @@ def main():
     if process == 'extract':
         extract_py(days)
 
-    if proc == 'ACCUMULATE':
+    if process == 'ACCUMULATE':
         accumulate(startdate, enddate, inloc, outloc)
 
 if __name__ == "__main__":
