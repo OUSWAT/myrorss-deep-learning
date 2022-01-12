@@ -79,8 +79,8 @@ def main():
     if proc == 'EXTRACT':
         extract(startdate, enddate, inloc, outloc)
 
-    if proc == 'ACCUMULATE':
-        accumulate(startdate, enddate, inloc, outloc)
+    # if proc == 'ACCUMULATE':
+    #     accumulate(startdate, enddate, inloc, outloc)
 
 if __name__ == "__main__":
     main()
