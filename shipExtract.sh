@@ -9,5 +9,5 @@
 
 echo "Start-date: $STARTDATE"
 echo "End-date: $ENDDATE"
-python Extract.py $STARTDATE $ENDDATE
+python extract.py $STARTDATE $ENDDATE
 

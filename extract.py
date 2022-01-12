@@ -22,13 +22,18 @@ DATA_HOME = '/condo/swatcommon/common/myrorss'
 date1 = sys.argv[1]
 date2 = sys.argv[2]
 
-def extract(startdate, enddate, inloc, outloc):
+with open('readme.txt', 'w') as f:
+    f.write('readme')
 
+print('starting')
+
+def extract(startdate, enddate, inloc, outloc):
+    print('hello')
     startepoch = calendar.timegm((int(startdate[0:4]), int(startdate[4:6]), int(startdate[6:8]), 12, 00, 00))
     endepoch = calendar.timegm((int(enddate[0:4]), int(enddate[4:6]), int(enddate[6:8]), 12, 00, 00))
 
     # CHANGE INTO INLOC DIR
-    os.chdir(inloc + '/' + startdate[0:4])
+    os.chdir(inloc  + startdate[0:4])
 
     # ACTUAL LOOPING
     for i in range(startepoch, endepoch, 86400):
@@ -36,8 +41,9 @@ def extract(startdate, enddate, inloc, outloc):
         date = time.strftime('%Y%m%d', time.gmtime(i))
 
         # TAR COMMAND
-        cmd = 'tar -xf ' + date + '.tar -C ' + outloc + ' --wildcards "' + '/MESH"'
+        cmd = 'tar -xvf ' + date + '.tar -C ' + outloc + ' --wildcards "MESH"'
         print(cmd)
+        f.write(cmd)
         p = sp.Popen(cmd, shell=True)
         p.wait()
 
@@ -73,14 +79,14 @@ def main():
 
     proc = 'EXTRACT'
 
-    inloc = '/condo/swatcommon/common/myrorss' + startdate[0:4]
+    inloc = '/condo/swatcommon/common/myrorss/' 
     outloc = '/scratch/mcmontalbano/myrorss/' + startdate[0:4] 
 
     if proc == 'EXTRACT':
         extract(startdate, enddate, inloc, outloc)
 
-    # if proc == 'ACCUMULATE':
-    #     accumulate(startdate, enddate, inloc, outloc)
+    if proc == 'ACCUMULATE':
+        accumulate(startdate, enddate, inloc, outloc)
 
 if __name__ == "__main__":
     main()

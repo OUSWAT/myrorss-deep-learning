@@ -5,7 +5,7 @@
 #SBATCH --chdir /condo/swatwork/mcmontalbano/MYRORSS/scripts
 
 STARTDATES=19980522
-ENDDATES=(19980523 19980524 19980525)
+ENDDATES=(19980523)
 for i in ${ENDDATES[@]}
 do
     DATE=( $(seq $STARTDATES 1 ${ENDDATES[i]}) )
