@@ -2,10 +2,17 @@
 #SBATCH -p swat_plus
 #SBATCH -J shipmulti
 #SBATCH -t 24:00:00
-#SBATCH --chdir /condo/swatwork/mcmontalbano/MYRORSS/scripts
+#SBATCH --chdir /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning
 
 STARTDATES=19980522
 ENDDATES=(19980523)
+one = 1
+for i in ${ENDDATES[@]}
+do 
+    start=$(( $i - $one))
+    echo "i = $i"
+    echo "start = $start"
+
 for i in ${ENDDATES[@]}
 do
     DATE=( $(seq $STARTDATES 1 ${ENDDATES[i]}) )
@@ -18,7 +25,7 @@ do
                 if [ $PENDING -lt 1 ]; then
                     echo $i
 
-                    cd /condo/swatwork/mcmontalbano/MYRORSS/scripts
+                    cd /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/scripts
                     echo "Running SegREDO $i"
                     sbatch --export=STARTDATE=$STARTDATES,ENDDATE=$i shipExtract.sh
                     date
