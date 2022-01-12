@@ -17,20 +17,27 @@ import calendar
 import numpy as np
 #import netCDF4
 
-DATA_HOME = '/condo/swatcommon/common/myrorss'
+DATA_HOME = '/condo/swatcommon/common/myrorss/'
+OUT_HOME = '/lscratch/mcmontalbano/myrorss/'
 
-date1 = sys.argv[1]
-date2 = sys.argv[2]
+# fields to extract/manipulate
+fields = ['MESH']
+
+def get_cases(year = '1998'):
+    # given a year, return the cases
+    # step through directory 
+    cases = []
+    for subdir, dirs, files in os.walk('{}/{}'.formaty(DATA_HOME,year):
+        for file in files:
+            cases.append(file[:8])    
+    return cases
 
 def extract(startdate, enddate, inloc, outloc):
     print('hello')
     startepoch = calendar.timegm((int(startdate[0:4]), int(startdate[4:6]), int(startdate[6:8]), 12, 00, 00))
     endepoch = calendar.timegm((int(enddate[0:4]), int(enddate[4:6]), int(enddate[6:8]), 12, 00, 00))
     field = 'MESH'
-    
     #os.chdir(inloc  + startdate[0:4])
-
-    # ACTUAL LOOPING
     for i in range(startepoch, endepoch, 86400):
 
         date = time.strftime('%Y%m%d', time.gmtime(i))
@@ -43,6 +50,13 @@ def extract(startdate, enddate, inloc, outloc):
         # p = sp.Popen(cmd, shell=True)
         # p.wait()
 
+def extract_py(days):
+    # extract loop
+    # feed it a list of days to extract
+    for day in days:
+        # iterate over fields
+        for field in fields:
+            os.system('tar -xvf {}.tar -C {} --wildcards "{}"'.format(day, OUT_HOME,field))
 
 def accumulate(startdate, enddate, inloc, outloc, interval):
 
@@ -56,11 +70,10 @@ def accumulate(startdate, enddate, inloc, outloc, interval):
     p = sp.Popen(cmd, shell=True)
     p.wait()
 
-
-def main():
-
-    startdate = date1 # dates are input from shipExtract.sh
-    enddate = date2
+def shell_loop():
+    # loop for doing jobs using the two shell scripts shipMulti.sh and shipExtract.sh
+    startdate = sys.argv[1] # dates are input from shipExtract.sh
+    enddate = sys.argv[2]
 
     proc = 'EXTRACT'
 
@@ -69,6 +82,23 @@ def main():
 
     if proc == 'EXTRACT':
         extract(startdate, enddate, inloc, outloc)
+
+
+def main():
+
+    process = 'extract'
+    year = sys.argv[1]
+
+    # extract first 10 cases of the year (b1 to b2)
+    b1 = 0
+    b2 = 10
+    days = get_cases()[b1:b2]
+
+    inloc = '/condo/swatcommon/common/myrorss/' 
+    outloc = '/scratch/mcmontalbano/myrorss/'
+
+    if process == 'extract':
+        extract_py(days)
 
     if proc == 'ACCUMULATE':
         accumulate(startdate, enddate, inloc, outloc)
