@@ -1,22 +1,19 @@
+# Author: Michael Montalbano
+# Date: 09/01/2021
+
+# Purpose: trains model. needs reform for myrorss project 
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import os
-import fnmatch
+import os, fnmatch, random, argeparse, os, re, sys, time 
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
-import random, argparse
-import os
-import fnmatch
-import re
-import numpy as np
 from tensorflow.python.ops.numpy_ops.np_math_ops import true_divide
+# from job_control import *
 from unet import *
-from job_control import *
-import sys
 import pickle
-import time
 from sklearn.preprocessing import StandardScaler
 from display import check_accuracy, pod, far
 

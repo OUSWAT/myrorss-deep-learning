@@ -4,15 +4,18 @@
 #SBATCH -t 24:00:00
 #SBATCH --chdir /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning
 
+source ~fagg/pythonenv/tensorflow/bin/activate
+
 STARTDATES=19980522
+ONE=1
 ENDDATES=(19980523)
-one = 1
+
 for i in ${ENDDATES[@]}
 do 
-    start=$(( $i - $one))
+    start=$(( $i - $ONE))
     echo "i = $i"
     echo "start = $start"
-
+done
 for i in ${ENDDATES[@]}
 do
     DATE=( $(seq $STARTDATES 1 ${ENDDATES[i]}) )
@@ -25,7 +28,7 @@ do
                 if [ $PENDING -lt 1 ]; then
                     echo $i
 
-                    cd /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/scripts
+                    cd /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning
                     echo "Running SegREDO $i"
                     sbatch --export=STARTDATE=$STARTDATES,ENDDATE=$i shipExtract.sh
                     date
