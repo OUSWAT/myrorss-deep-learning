@@ -1,6 +1,5 @@
 ############################################
 #
-# Author: Skylar S Williams
 # Modified by: Michael Montalbano
 #
 # Purpose: Extract data fields from tars 
@@ -11,16 +10,18 @@
 import os, sys, datetime
 import pandas as pd
 import subprocess as sp
-import time
-import calendar
+import time, calendar, gzip
 import numpy as np
-#import netCDF4
+import netCDF4
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/scratch/mcmontalbano/myrorss'
-
+lon_NW, lat_NW, lon_SE, lat_SE = # search documents 
 # fields to extract/manipulate
 fields = ['MESH']
+
+####################################
+# Functions 
 
 def get_cases(year = '1998'):
     # given a year, return the cases
@@ -31,65 +32,47 @@ def get_cases(year = '1998'):
             cases.append(file[:8])    
     return cases
 
-def extract(startdate, enddate, inloc, outloc):
-    print('hello')
-    startepoch = calendar.timegm((int(startdate[0:4]), int(startdate[4:6]), int(startdate[6:8]), 12, 00, 00))
-    endepoch = calendar.timegm((int(enddate[0:4]), int(enddate[4:6]), int(enddate[6:8]), 12, 00, 00))
-    field = 'MESH'
+def extract(day):
+    # extract processed tars for fields saved as .netcdf.gzs 
+    year = day[:4]
+    os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
+    # iterate over fields
+
+    for field in fields:
+        os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+
+    for subdir, dirs, files in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field): # loop through extracted .netcdf.gz's
+        for subdir1, dirs1, files1 in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)) # get into tilt folders
+            print(subdir1) # troubleshooting
+            for f in files1:                                                                     # loop through files
+                with gzip.open('{}/{}/{}/{}/{}/{}'.format(OUT_HOME,year,day,field,subdir1,f)) as gz:  # open 
+                    with netCDF4.Dataset('dummy',mode='r', memory=gz.read()) as nc:              # convert to netcdf
+                        nc.to_necdf(path='{}/{}/{}/{}/{}/{}'.format(OUT_HOME,year,day,field,subdir,f) # save as netcdf
+                        print(nc.variables) 
+                    
+    # field = 'MESH'
     #os.chdir(inloc  + startdate[0:4])
-    for i in range(startepoch, endepoch, 86400):
+    # for i in range(startepoch, endepoch, 86400):
 
-        date = time.strftime('%Y%m%d', time.gmtime(i))
-        os.system('tar -xvf {}.tar -C {} --wildcards "{}"'.format(date, outloc,field))
-        cmd = 'tar -xvf {}.tar -C {} --wildcards "{}"'.format(date, outloc,field)
-        # cmd = 'tar -xvf ' + date + '.tar -C ' + outloc + ' --wildcards "MESH"'
-        with open('readme.txt', 'w') as f:
-            f.write('cmd')
-            f.write(startepoch,endepoch)
-        # p = sp.Popen(cmd, shell=True)
-        # p.wait()
+        
 
-def extract_py(days):
-    # extract loop
-    # feed it a list of days to extract
-    for day in days:
-        year = day[:4]
-        os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
-        # iterate over fields
-        for field in fields:
-            os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
 
-def accumulate(startdate, enddate, inloc, outloc, interval):
 
-    # FILL IN WITH PSEUDO RADAR DATA TO GET EVEN TIMING
-    # cmd = 'makeMissingRadar something something something'
-    # p = sp.Popen(cmd, shell=True)
-    # p.wait()
+def localmax(day):
 
-    # ACCUMULATE EVERY HOUR ON THE HOUR (allows for cleaner accumulations on the yearly scale)
-    cmd = 'w2accumulator -g MESHMhtpost -C 1 -t 60 -m MESH -O MESH_Max_'
-    p = sp.Popen(cmd, shell=True)
-    p.wait()
+def get_storm_info(day):
+    # Given a day, return dataframe case_df which contains identifying information about each storm
+    # and its intensity, done using MergedReflectivityFeatureTable
 
-def shell_loop():
-    # loop for doing jobs using the two shell scripts shipMulti.sh and shipExtract.sh
-    startdate = sys.argv[1] # dates are input from shipExtract.sh
-    enddate = sys.argv[2]
+#def accumulate(startdate, enddate, inloc, outloc, interval):
 
-    proc = 'EXTRACT'
 
-    inloc = '/condo/swatcommon/common/myrorss/' 
-    outloc = '/scratch/mcmontalbano/myrorss/'
-
-    if proc == 'EXTRACT':
-        extract(startdate, enddate, inloc, outloc)
 
 
 def main():
 
     process = 'extract'
     #year = sys.argv[1]
-    year = '1998'
     # extract first 10 cases of the year (b1 to b2)
     b1 = 0
     b2 = 10
@@ -98,11 +81,11 @@ def main():
     inloc = '/condo/swatcommon/common/myrorss/' 
     outloc = '/scratch/mcmontalbano/myrorss/'
 
-    if process == 'extract':
-        extract_py(days)
+    for day in days:
+        extract(day)
+    
 
-    if process == 'ACCUMULATE':
-        accumulate(startdate, enddate, inloc, outloc)
+
 
 if __name__ == "__main__":
     main()
