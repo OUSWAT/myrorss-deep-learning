@@ -50,12 +50,21 @@ def extract(day):
     year = day[:4]
     os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
     # iterate over fields
-    field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field)
-    print(os.listdir(field_path))
-    sys.exit()
+    field = 'MESH'
+    
+    
     for field in fields:
         os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
-    field = ['MESH']
+        field_path = '{}/{}/{}/{}'.format('OUT_HOME','year','day','field')
+        subdir = os.listdir(field_path)
+        files = next(walk('{}/{}'.format(field_path,subdir), (None, None, []))[2] # only grab files
+        for f in files:
+            sys.stdout - open(trouble,'a')
+            print(f)
+    sys.exit()
+
+
+    field = 'MESH'
     # loop through files and convert to netcdf format
     for subdir, dirs, files in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)):        # loop through extracted .netcdf.gz's
         print(subdir)
@@ -154,7 +163,7 @@ def main():
     # extract first 10 cases of the year (b1 to b2)
     b1 = 0
     b2 = 2
-    days = get_cases()[b1:b2]
+    days = get_cases(year='1999')[b1:b2]
     year = '1999'
     inloc = '/condo/swatcommon/common/myrorss/' 
     outloc = '/scratch/mcmontalbano/myrorss/'
