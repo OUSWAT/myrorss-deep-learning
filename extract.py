@@ -50,10 +50,12 @@ def extract(day):
     year = day[:4]
     os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
     # iterate over fields
-
+    field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field)
+    print(os.listdir(field_path))
+    sys.exit()
     for field in fields:
         os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
-
+    field = ['MESH']
     # loop through files and convert to netcdf format
     for subdir, dirs, files in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)):        # loop through extracted .netcdf.gz's
         print(subdir)
