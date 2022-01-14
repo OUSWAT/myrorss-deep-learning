@@ -57,10 +57,10 @@ def extract(day):
         os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
         field_path = '{}/{}/{}/{}'.format('OUT_HOME','year','day','field')
         subdir = os.listdir(field_path)
-        files = next(walk('{}/{}'.format(field_path,subdir), (None, None, []))[2] # only grab files
+        files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
         for f in files:
-            sys.stdout - open(trouble,'a')
-            print(f)
+           sys.stdout - open(trouble,'a')
+           print(f)
     sys.exit()
 
 
