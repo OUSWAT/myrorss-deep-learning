@@ -10,11 +10,11 @@
 #############################################
 
 import os, sys, datetime
-import pandas as pd
+#import pandas as pd
 import subprocess as sp
 import time, calendar, gzip
 import numpy as np
-#import netCDF4
+import netCDF4
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/scratch/mcmontalbano/myrorss'
@@ -56,6 +56,8 @@ def extract(day):
 
     # loop through files and convert to netcdf format
     for subdir, dirs, files in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)):        # loop through extracted .netcdf.gz's
+        print(subdir)
+        sys.exit() 
         for subdir1, dirs1, files1 in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)): # get into tilt folders
             sys.stdout = open(trouble,"a")
             print(subdir,'\n',subdir1,'\n')
@@ -151,7 +153,7 @@ def main():
     b1 = 0
     b2 = 2
     days = get_cases()[b1:b2]
-
+    year = '1999'
     inloc = '/condo/swatcommon/common/myrorss/' 
     outloc = '/scratch/mcmontalbano/myrorss/'
 
