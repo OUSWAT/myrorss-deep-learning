@@ -15,13 +15,14 @@ import subprocess as sp
 import time, calendar, gzip
 import numpy as np
 import netCDF4
+from os import walk
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/scratch/mcmontalbano/myrorss'
 CONV_HOME = OUT_HOME # may play with names in future
 lon_NW, lat_NW, lon_SE, lat_SE = 1, 2, 3, 4 # search documents
 # fields to extract/manipulate
-fields = ['MESH']
+fields = [ 'MergedReflectivityQCComposite', 'MergedLLShear']
 
 ####################################
 # Troubleshooting file
@@ -49,41 +50,26 @@ def extract(day):
     '''
     year = day[:4]
     os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
-    # iterate over fields
-    field = 'MESH'
-    
+    # iterate over fields   
     
     for field in fields:
         os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
-        field_path = '{}/{}/{}/{}'.format('OUT_HOME','year','day','field')
+        field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field)
         subdir = os.listdir(field_path)
         files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
         for f in files:
-           sys.stdout - open(trouble,'a')
-           print(f)
-    sys.exit()
-
-
-    field = 'MESH'
-    # loop through files and convert to netcdf format
-    for subdir, dirs, files in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)):        # loop through extracted .netcdf.gz's
-        print(subdir)
-        sys.exit() 
-        for subdir1, dirs1, files1 in os.walk('{}/{}/{}/{}'.format(OUT_HOME,year,day,field)): # get into tilt folders
-            sys.stdout = open(trouble,"a")
-            print(subdir,'\n',subdir1,'\n')
-            for f in files1:                                                                     # loop through files
-                with gzip.open('{}/{}/{}/{}/{}/{}'.format(OUT_HOME,year,day,field,subdir1,f)) as gz:  # open 
-                    with netCDF4.Dataset('dummy',mode='r', memory=gz.read()) as nc:              # convert to netcdf
-                        nc.to_necdf(path='{}/{}/{}/{}/{}/{}'.format(OUT_HOME,year,day,field,subdir,f)) # save as netcdf
-                        print(nc.variables) 
+            with gzip.open('{}/{}/{}'.format(field_path, subdir, f)) as gz:
+                with netCDF4.Dataset('dummy',mode='r',memory=gz.read()) as nc:
+                    nc.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path,subdir,day))
+                    
+                    
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
         os.system('rm {}/{}/{}/{}/{}/*.tar'.format(OUT_HOME,year,day,field,subdir1))
         os.system('rm {}/{}/{}/{}/{}/*.gz'.format(OUT_HOME,year,day,field,subdir1))        
 
-def localmax(day, multi_n):
+def localmax(day):
     '''
-    This is the old script
+    Given a day in YYYYMMDD, run w2localmax
     To do:
     - change path to OUT_HOME, which is converted MYRORSS storage
     - pick path to 
@@ -91,8 +77,9 @@ def localmax(day, multi_n):
     '''
     year = day[:4]
     myrorss_path = '{}/{}/'.format(OUT_PATH,year)
-    os.system('makeIndex.pl /mnt/data/SHAVE_cases/{}/multi{} code_index.xml'.format(date,multi_n))
-    os.system('w2localmax -i /mnt/data/SHAVE_cases/{}/multi{}/code_index.xml -I MergedReflectivityQCComposite -o /mnt/data/michaelm/practicum/cases/{}/DATE -s -d "40 60 5"'.format(date,multi_n,date,multi_n))
+    os.system('makeIndex.pl {}/{} code_index.xml'.format(date,multi_n))
+    
+    os.system('w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /mnt/data/michaelm/practicum/cases/{}/DATE -s -d "40 60 5"'.format(date,multi_n,date,multi_n))
     os.system('makeIndex.pl /mnt/data/michaelm/practicum/cases/{}/multi{} code_index.xml'.format(date,multi_n))
     os.system('w2table2csv -i {}/{}/multi{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/DATE/csv -h'.format(OUT_HOME,date,multi_n,OUT_HOME,date,multi_n))
 
