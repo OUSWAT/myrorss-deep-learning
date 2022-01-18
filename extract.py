@@ -20,9 +20,10 @@ from os import walk
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/scratch/mcmontalbano/myrorss'
 CONV_HOME = OUT_HOME # may play with names in future
-lon_NW, lat_NW, lon_SE, lat_SE = 1, 2, 3, 4 # search documents
-# fields to extract/manipulate
-fields = [ 'MergedReflectivityQCComposite', 'MergedLLShear']
+TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
+
+lon_NW, lat_NW, lon_SE, lat_SE = -130.005, 55.005, -59.995, 19.995 # see MYRORSS readme at https://osf.io/kbyf7/
+fields = ['MergedReflectivityQCComposite', 'MergedLLShear']
 
 ####################################
 # Troubleshooting file
@@ -76,14 +77,11 @@ def localmax(day):
     - check field name 'MergedReflectivityQCComposite'
     '''
     year = day[:4]
-    myrorss_path = '{}/{}/'.format(OUT_PATH,year)
-    os.system('makeIndex.pl {}/{} code_index.xml'.format(date,multi_n))
-    
-    os.system('w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /mnt/data/michaelm/practicum/cases/{}/DATE -s -d "40 60 5"'.format(date,multi_n,date,multi_n))
-    os.system('makeIndex.pl /mnt/data/michaelm/practicum/cases/{}/multi{} code_index.xml'.format(date,multi_n))
-    os.system('w2table2csv -i {}/{}/multi{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/DATE/csv -h'.format(OUT_HOME,date,multi_n,OUT_HOME,date,multi_n))
-
-
+    myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
+    os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
+    os.system('w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(myrorss_path,day,myrorss_path,day))
+    os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
+    os.system('w2table2csv -i {}/{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/csv -h'.format(myrorss_path,day,myrorss_path,day))
 
 def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
     # this also needs reform    
