@@ -59,10 +59,10 @@ def extract(day):
         subdir = os.listdir(field_path)
         files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
         for f in files:
-            with gzip.open('{}/{}/{}'.format(field_path, subdir, f)) as gz:
-                with netCDF4.Dataset('dummy',mode='r',memory=gz.read()) as nc:
-                    nc.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path,subdir,day))
-                    
+            with gzip.open('{}/{}/{}'.format(field_path, subdir, f)) as gz: # open netcdf.gz
+                with netCDF4.Dataset('dummy',mode='r',memory=gz.read()) as nc: # open as netcdf
+                    #nc.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path,subdir,f)) # save as .netcdf
+                    nc.to_netcdf(path='{}/{}/{}.netcdf'.format(TRAINING_HOME, year, f)) 
                     
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
         os.system('rm {}/{}/{}/{}/{}/*.tar'.format(OUT_HOME,year,day,field,subdir1))
@@ -78,6 +78,9 @@ def localmax(day):
     '''
     year = day[:4]
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
+    cmd = 'w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(myrorss_path,day,myrorss_path,day)
+    #sys.stdout(trouble,"w")
+    #print(cmd)
     os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
     os.system('w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(myrorss_path,day,myrorss_path,day))
     os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
@@ -154,7 +157,7 @@ def main():
     outloc = '/scratch/mcmontalbano/myrorss/'
 
     for day in days:
-        extract(day)
+#        extract(day)
         localmax(day)
         get_cases_info(day) # use mergedtable from localmax to store locations
         
