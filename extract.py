@@ -10,7 +10,7 @@
 #############################################
 
 import os, sys, datetime
-#import pandas as pd
+import pandas as pd
 import subprocess as sp
 import time, calendar, gzip
 import numpy as np
@@ -21,15 +21,20 @@ DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data/uncropped'
 CONV_HOME = OUT_HOME # may play with names in future
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
+fields_accum = ['MESH']
+
 
 lon_NW, lat_NW, lon_SE, lat_SE = -130.005, 55.005, -59.995, 19.995 # see MYRORSS readme at https://osf.io/kbyf7/
-fields = ['MergedReflectivityQCComposite', 'MergedLLShear']
-
+fields = ['MergedReflectivityQCComposite','MESH','EchoTop_18','EchoTop_50','MergedLLShear','MergedMLShear','MergedReflectivityQC','Reflectivity_0C', 'Reflectivity_-10C','Reflectivity_-20C','ReflectivityAtLowestAltitude','SHI']
+#fields = ['MergedReflectivityQC']
 ####################################
 # Troubleshooting file
 trouble = "trouble.txt"
 with open(trouble,"w") as f:
     pass
+
+#os.system('makeIndex.pl /condo/swatwork/mcmontalbano/MYRORSS/data/uncropped/1999/19990103 code_index.xml')
+#sys.exit()
 
 ####################################
 # Functions 
@@ -54,19 +59,25 @@ def extract(day):
     # iterate over fields   
     
     for field in fields:
-        os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+        if field == 'MergedLLShear' or field == 'MergedMLShear':
+            os.system('tar -xvf {}/{}/Azshear/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+        else:
+            os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
         field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field)
-        subdir = os.listdir(field_path)
-        files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
-        for f in files:
-            with gzip.open('{}/{}/{}'.format(field_path, subdir, f)) as gz: # open netcdf.gz
-                with netCDF4.Dataset('dummy',mode='r',memory=gz.read()) as nc: # open as netcdf
-                    #nc.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path,subdir,f)) # save as .netcdf
-                    nc.to_netcdf(path='{}/{}/{}.netcdf'.format(TRAINING_HOME, year, f)) 
-                    
+        subdirs = os.listdir(field_path)
+        for subdir in subdirs:
+            files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
+            for f in files:
+                with gzip.open('{}/{}/{}'.format(field_path, subdir, f)) as gz: # open netcdf.gz
+                    try:
+                        with netCDF4.Dataset('dummy',mode='r',memory=gz.read()) as nc: # open as netcdf
+                        #nc.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path,subdir,f)) # save as .netcdf
+                            nc.to_netcdf(path='{}/{}/{}.netcdf'.format(TRAINING_HOME, year, f)) 
+                    except:
+                        pass    
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
-        os.system('rm {}/{}/{}/{}/{}/*.tar'.format(OUT_HOME,year,day,field,subdir1))
-        os.system('rm {}/{}/{}/{}/{}/*.gz'.format(OUT_HOME,year,day,field,subdir1))        
+            os.system('rm {}/{}/{}/{}/{}/*.tar'.format(OUT_HOME,year,day,field,subdir))
+            os.system('rm {}/{}/{}/{}/{}/*.gz'.format(OUT_HOME,year,day,field,subdir))        
 
 def localmax(day):
     '''
@@ -77,29 +88,30 @@ def localmax(day):
     - check field name 'MergedReflectivityQCComposite'
     '''
     year = day[:4]
-    myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
-    cmd = 'w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(myrorss_path,day,myrorss_path,day)
+    myrorss_path = '{}/{}'.format(TRAINING_HOME,year)
+    out_path = '{}/{}/{}'.format(OUT_HOME,year,day)
     #sys.stdout(trouble,"w")
     #print(cmd)
-    os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
-    os.system('w2localmax -i {}/{}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(myrorss_path,day,myrorss_path,day))
+    os.system('makeIndex.pl {} code_index.xml'.format(out_path))
+    os.system('w2localmax -i {}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(out_path,myrorss_path,day))
     os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
     os.system('w2table2csv -i {}/{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/csv -h'.format(myrorss_path,day,myrorss_path,day))
 
 def get_storm_info(day):
+    year = day[:4] 
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
-    LOCALMAX_PATH = '{}/{}/csv/'.format(myrorss_path, day)
+    LOCALMAX_PATH = '{}/{}/csv'.format(myrorss_path, day)
     case_df = pd.DataFrame(columns={"timedate","Latitude","Longitude","Storm","Reflectivity"})
     i=+1
-
+    delta = 0.15
     # builds dataframe of case centers 
-    files = sorted(next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2]) # Grab files within localmax directory (csv)
+    files = sorted(next(walk('{}'.format(LOCALMAX_PATH)), (None, None, []))[2]) # Grab files within localmax directory (csv)
     length=len(files)-1
-    for idx, file in enumerate(files):
-        timedate = file[-19:-4]
+    for idx, f in enumerate(files):
+        timedate = f[-19:-4]
         minutes = timedate[-4:-2]
-        # if (int(minutes) >= 28 and int(minutes) <= 32) or (int(minutes > ))
-        if (minutes == '30' or minutes =='00') and idx != 0 and idx != length:
+        if (int(minutes) >= 28 and int(minutes) <= 32) or (int(minutes)>=58 and int(minutes)<=60) or (int(minutes)>=0 and int(minutes)<=2):
+        #if (minutes == '30' or minutes =='00') and idx != 0 and idx != length:
             df = pd.read_csv('{}/MergedReflectivityQCCompositeMaxFeatureTable_{}.csv'.format(LOCALMAX_PATH, timedate))
             if df.empty:
                 print("Empty dataframe!")  
@@ -154,22 +166,31 @@ def get_storm_info(day):
     case_df = case_df.sort_values(['timedate'])
     return case_df
 
-def accumulator(case_df, fields):
-    date = case_df['casedate']
-    os.system('makeIndex.pl {}/{}/multi{} code_index.xml'.format(DATA_HOME,date,multi_n))
+def accumulate(day, fields):
+    date = day
+    year = date[:4]
+    myrorss_path = '{}/{}'.format(TRAINING_HOME, year)
+    os.system('makeIndex.pl {}/{} code_index.xml'.format(DATA_HOME,date))
     for field in fields:
+        with open('trouble.txt',"w") as o:
+            print('w2accumulator -i {}/{}/code_index.xml -g {} -o {}/{}/ -C 1 -t 30 --verbose="severe"'.format(OUT_HOME, date, field,myrorss_path, date))
         os.system('w2accumulator -i {}/{}/code_index.xml -g {} -o {}/{}/ -C 1 -t 30 --verbose="severe"'.format(OUT_HOME, date, field,myrorss_path, date))
         if field[8:] == 'Shear':
             os.system('w2accumulator -i {}/{}/code_index.xml -g {} -o {}/{}/uncropped -C 3 -t 30 --verbose="severe"'.format(OUT_HOME, date, field, OUT_HOME, date))
 
-def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
+def cropconv(case_df, date, fields_accum):
     # this also needs reform    
+    year = date[:4]
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
-    os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
+    #os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
+    
+    with open('trouble.txt',"w") as o:
+        print(case_df,file=o)
+
     for idx, row in case_df.iterrows():
+        print(row)
         # if idx <= 200:
         #     continue
-        multi = '{}/{}/multi{}'.format(OUT_HOME,date,multi_n)
         lon = row['Longitude']
         lat = row['Latitude']
         delta = 0.15
@@ -185,7 +206,7 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
 
         # crop input
         #########################
-        os.system("makeIndex.pl {}/{}/ code_index.xml {} {}".format(myrorss_path,date, time1, time2)) # make index for uncropped
+        os.system("makeIndex.pl {}/{} code_index.xml {} {}".format(OUT_HOME,date, time1, time2)) # make index for uncropped
         for field in fields_accum:
            os.system('w2cropconv -i {}/{}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         #########################
@@ -198,7 +219,7 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
         os.system("makeIndex.pl {}/{} code_index.xml {} {}".format(myrorss_path,date, time1, time2))
         os.system('w2cropconv -i {}/{}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         # ########################
-
+'''
         # NSE 
         # crop for 30 min prior to 30 min ahead
         time1 = row['timedate']
@@ -209,7 +230,7 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
         os.system("makeIndex.pl {}/{}/NSE code_index.xml {} {}".format(OUT_HOME,date, time1, time2))
         for field in nse_fields:
             os.system('w2cropconv -i {}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, field,myrorss_path,date, idx, latNW, lonNW,latSE,lonSE))
-
+'''
         # commenting this out for repair
         # os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,#date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
 
@@ -223,11 +244,12 @@ def main():
     days = get_cases(year='1999')[b1:b2]
 
     for day in days:
-        extract(day)
-        localmax(day)
-        get_storm_info(day) # use mergedtable from localmax to store locations
-        #accumulate(day)
-        cropconv(day)
+        #extract(day)
+        #localmax(day)
+        storms = get_storm_info(day) # use mergedtable from localmax to store locations
+        print(storms)        
+        accumulate(day,fields_accum)
+        #cropconv(storms,day,fields)
    
 if __name__ == "__main__":
     main()
