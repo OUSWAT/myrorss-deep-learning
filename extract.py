@@ -18,7 +18,7 @@ import netCDF4
 from os import walk
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
-OUT_HOME = '/scratch/mcmontalbano/myrorss'
+OUT_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data/uncropped'
 CONV_HOME = OUT_HOME # may play with names in future
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 
@@ -86,9 +86,86 @@ def localmax(day):
     os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
     os.system('w2table2csv -i {}/{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/csv -h'.format(myrorss_path,day,myrorss_path,day))
 
+def get_storm_info(day):
+    myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
+    LOCALMAX_PATH = '{}/{}/csv/'.format(myrorss_path, day)
+    case_df = pd.DataFrame(columns={"timedate","Latitude","Longitude","Storm","Reflectivity"})
+    i=+1
+
+    # builds dataframe of case centers 
+    files = sorted(next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2]) # Grab files within localmax directory (csv)
+    length=len(files)-1
+    for idx, file in enumerate(files):
+        timedate = file[-19:-4]
+        minutes = timedate[-4:-2]
+        # if (int(minutes) >= 28 and int(minutes) <= 32) or (int(minutes > ))
+        if (minutes == '30' or minutes =='00') and idx != 0 and idx != length:
+            df = pd.read_csv('{}/MergedReflectivityQCCompositeMaxFeatureTable_{}.csv'.format(LOCALMAX_PATH, timedate))
+            if df.empty:
+                print("Empty dataframe!")  
+            else:
+                # List of valid clusters
+                valid_clusters = {}
+                keys = range(df.shape[0])
+                for i in keys:
+                    valid_clusters[i] = True # initialize valid with Trues
+                # find max
+                for idx, val in enumerate(df["MergedReflectivityQCCompositeMax"]):
+                    if valid_clusters[idx] == False:
+                        continue
+                    if val < 40 or df['Size'].iloc[idx] < 20:
+                        valid_clusters[idx] = False
+                        continue
+                    lat = df['#Latitude'].iloc[idx]
+                    lon = df['Longitude'].iloc[idx]
+                    latN = lat + delta
+                    latS = lat - delta
+                    lonW =  lon - delta
+                    lonE =  lon + delta
+                    # Don't include clusters too close to domain edge
+                    if latN > (lat_NW - 0.16) or latS <= (lat_SE + 0.16) or lonW < (lon_NW + 0.16) or lonE >= (lon_SE-0.16):
+                        valid_clusters[idx] = False
+                        continue
+                    for idx2, val2 in enumerate(df["MergedReflectivityQCCompositeMax"]):
+                        if idx2 == idx or valid_clusters[idx2] == False:
+                            continue
+                        if df['Size'].iloc[idx2] < 20 or val2 < 40:
+                            valid_clusters[idx2] = False
+                            continue 
+                        lat2 = df['#Latitude'].iloc[idx2]
+                        lon2 = df['Longitude'].iloc[idx2]
+                        if lat2 < latN and lat2 > latS and lon2 > lonW and lon2 < lonE:
+                            if val2 > val: 
+                                valid_clusters[idx] = False
+                            else:
+                                valid_clusters[idx2] = False
+                # valid_clusters is complete
+                # # add valid rows to case_dfS
+                for key in valid_clusters.keys():
+                    if valid_clusters[key] == False:
+                        continue
+                    else:
+                        row_idx = key
+                        try:
+                            row = {"timedate":timedate,"Latitude":df['#Latitude'].iloc[row_idx],"Longitude":df['Longitude'].iloc[row_idx],'Storm':df['RowName'].iloc[row_idx],'Reflectivity':df['MergedReflectivityQCCompositeMax'].iloc[row_idx]}
+                        except:
+                            print(row_idx)
+                        case_df.loc[len(case_df.index)] = row
+    case_df = case_df.sort_values(['timedate'])
+    return case_df
+
+def w2accumulator(case_df, fields):
+    date = case_df['casedate']
+    os.system('makeIndex.pl {}/{}/multi{} code_index.xml'.format(DATA_HOME,date,multi_n))
+    for field in fields:
+        os.system('w2accumulator -i {}/{}/code_index.xml -g {} -o {}/{}/ -C 1 -t 30 --verbose="severe"'.format(OUT_HOME, date, field,myrorss_path, date))
+        if field[8:] == 'Shear':
+            os.system('w2accumulator -i {}/{}/code_index.xml -g {} -o {}/{}/uncropped -C 3 -t 30 --verbose="severe"'.format(OUT_HOME, date, field, OUT_HOME, date))
+
 def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
     # this also needs reform    
-    os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(DATA_HOME,date))
+    myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
+    os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
     for idx, row in case_df.iterrows():
         # if idx <= 200:
         #     continue
@@ -108,9 +185,9 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
 
         # crop input
         #########################
-        os.system("makeIndex.pl {}/{}/multi{}/uncropped code_index.xml {} {}".format(OUT_HOME,date,multi_n, time1, time2)) # make index for uncropped
+        os.system("makeIndex.pl {}/{}/ code_index.xml {} {}".format(myrorss_path,date, time1, time2)) # make index for uncropped
         for field in fields_accum:
-           os.system('w2cropconv -i {}/{}/multi{}/uncropped/code_index.xml -I {} -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:02d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, multi_n, field, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
+           os.system('w2cropconv -i {}/{}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         #########################
 
         # crop target -
@@ -118,8 +195,8 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
         time1 = (date_1+datetime.timedelta(minutes=30)).strftime('%Y%m%d-%H%M%S')
         date_1 = datetime.datetime.strptime(time1, "%Y%m%d-%H%M%S")
         time2 = (date_1+datetime.timedelta(minutes=1)).strftime('%Y%m%d-%H%M%S')        
-        os.system("makeIndex.pl {}/{}/multi{}/uncropped code_index.xml {} {}".format(OUT_HOME,date,multi_n, time1, time2))
-        os.system('w2cropconv -i {}/{}/multi{}/uncropped/code_index.xml -I MESH_Max_30min -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:02d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
+        os.system("makeIndex.pl {}/{} code_index.xml {} {}".format(myrorss_path,date, time1, time2))
+        os.system('w2cropconv -i {}/{}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         # ########################
 
         # NSE 
@@ -129,17 +206,16 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
         time1 = (date_1+datetime.timedelta(minutes=-30)).strftime('%Y%m%d-%H%M%S')
         time2 = (date_1+datetime.timedelta(minutes=30)).strftime('%Y%m%d-%H%M%S')
 
-        os.system("makeIndex.pl {}/{}/NSE code_index.xml {} {}".format(DATA_HOME,date, time1, time2))
+        os.system("makeIndex.pl {}/{}/NSE code_index.xml {} {}".format(OUT_HOME,date, time1, time2))
         for field in nse_fields:
-            os.system('w2cropconv -i {}/{}/NSE/code_index.xml -I {} -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:02d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,date, field, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
+            os.system('w2cropconv -i {}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,date, field,myrorss_path,date, idx, latNW, lonNW,latSE,lonSE))
 
         # commenting this out for repair
-        os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:02d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
+        # os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,#date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
 
 
 
 
-#def accumulate(startdate, enddate, inloc, outloc, interval):
 
 
 
