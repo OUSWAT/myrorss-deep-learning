@@ -154,7 +154,7 @@ def get_storm_info(day):
     case_df = case_df.sort_values(['timedate'])
     return case_df
 
-def w2accumulator(case_df, fields):
+def accumulator(case_df, fields):
     date = case_df['casedate']
     os.system('makeIndex.pl {}/{}/multi{} code_index.xml'.format(DATA_HOME,date,multi_n))
     for field in fields:
@@ -213,30 +213,21 @@ def cropconv(case_df, date, nse_fields, fields_accum, multi_n):
         # commenting this out for repair
         # os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,#date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
 
-
-
-
-
-
-
-
 def main():
 
     process = 'extract'
     #year = sys.argv[1]
     # extract first 10 cases of the year (b1 to b2)
-    b1 = 0
-    b2 = 2
+    b1 = 2
+    b2 = 3
     days = get_cases(year='1999')[b1:b2]
-    year = '1999'
-    inloc = '/condo/swatcommon/common/myrorss/' 
-    outloc = '/scratch/mcmontalbano/myrorss/'
 
     for day in days:
-#        extract(day)
+        extract(day)
         localmax(day)
-        get_cases_info(day) # use mergedtable from localmax to store locations
-        
+        get_storm_info(day) # use mergedtable from localmax to store locations
+        #accumulate(day)
+        cropconv(day)
    
 if __name__ == "__main__":
     main()
