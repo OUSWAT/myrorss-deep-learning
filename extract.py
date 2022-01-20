@@ -236,20 +236,18 @@ def cropconv(case_df, date, fields_accum):
 
 def main():
 
-    process = 'extract'
     #year = sys.argv[1]
     # extract first 10 cases of the year (b1 to b2)
-    b1 = 2
-    b2 = 3
+    b1 = 3
+    b2 = 4
     days = get_cases(year='1999')[b1:b2]
 
     for day in days:
-        #extract(day)
+        extract(day)
         #localmax(day)
-        storms = get_storm_info(day) # use mergedtable from localmax to store locations
-        print(storms)        
+        #storms = get_storm_info(day) # use mergedtable from localmax to store locations       
         accumulate(day,fields_accum)
-        #cropconv(storms,day,fields)
+        cropconv(storms,day,fields)
    
 if __name__ == "__main__":
     main()
