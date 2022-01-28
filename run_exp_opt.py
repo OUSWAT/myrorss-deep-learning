@@ -24,15 +24,15 @@ from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, Dropout, Ba
 from tensorflow.keras.layers import Convolution2D, Dense, MaxPooling2D, Flatten, BatchNormalization, Dropout, Concatenate, Input, UpSampling2D, Add
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
-import time
+import time, os
 
 # gpus = tf.config.experimental.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(gpus, True)
 
 # set constants
-RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
+RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/SHAVE/shave-scripts/results'
 data_path = r'C:\\Users\\User\\deep_learning\\data'
-data_path = '/condo/swatcommon/swatwork/mcmontalbano/SHAVE/data'
+data_path = '/condo/swatwork/mcmontalbano/SHAVE/data'
 #results_path = r'C:\\Users\\User\\deep_learning\\data'
 #strategy = tf.distribute.MirroredStrategy()
 #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -65,7 +65,7 @@ def data():
     """
     num_id = random.randint(0,10000) # random ID for each model
     input_shape = (2219, 60, 60, 41)
-
+    data_path='/condo/swatwork/mcmontalbano/SHAVE/data'
     def transform(var):
         '''
         Purpose: scale data b/w 0 and 1 
@@ -110,25 +110,27 @@ def data():
 
     
     exp_type = 'mse'
-    ins = np.load('{}\\ins.npy'.format(data_path))
-    outs = np.load('{}\\outs.npy'.format(data_path))
+    ins = np.load('{}/ins.npy'.format(data_path))
+    outs = np.load('{}/outs.npy'.format(data_path))
     indices = np.asarray(range(ins.shape[0]))
 
     print(ins.shape)
     print(ins[0].itemsize*ins[0].size)
 
     # train test split 75 25
-    ins_train, ins_test , outs_train, outs_test = train_test_split(ins, outs, test_size=0.25, random_state=3)
-    ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = train_test_split(indices, indices, test_size=0.25, random_state=3)
+    rand = 3
+    ins_train, ins_test , outs_train, outs_test = train_test_split(ins, outs, test_size=0.25, random_state=rand)
+    ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = train_test_split(indices, indices, test_size=0.25, random_state=rand)
   
     ins_train, scalers = transform(ins_train)
-    ins_test, scalers = transform_test(ins_test,scalers)
-    pickle.dump(scalers, open('scaler_ins_{}_id_{}.pkl'.format(exp_type,num_id),'wb'))
+    ins_test, scalers = transform_test(ins_test,scalers)  
+    if os.path.exists('scaler_ins_random_state_{}'.format(rand)):
+        pickle.dump(scalers, open('scaler_ins_random_state_{}.pkl'.format(rand),'wb'))
 
     outs_train, scalers = transform(outs_train)
     outs_test, scalers = transform_test(outs_test,scalers)
-    pickle.dump(scalers, open('scaler_outs_{}_id_{}.pkl'.format(exp_type,num_id),'wb'))
-    print(ins_train.shape)
+    if not os.path.exists('scaler_outs_random_state_{}'.format(rand)):
+        pickle.dump(scalers, open('scaler_outs_random_state_{}.pkl'.format(rand),'wb'))
     
     return ins_train, outs_train, ins_test, outs_test
 
@@ -169,14 +171,18 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
     activation = lrelu
 
     in_shape = (60, 60, 41)
-    patience = 20
-    filters = {{choice([[16,16], [8,16]])}}
+    patience = 100
+    #filter0 = {{choice([16,32])}}
+    #filter1 = {{choice([32,64])}} 
+    #filters = [filter0,filter1]
     tensor_list = [] # used to store high-res tensors for skip connections to upsampled tensors (The Strings in the Net)
     input_tensor = Input(shape=in_shape, name="input") # input images from sample as a tensor
     tensor = BatchNormalization()(input_tensor)     # prevents overfitting by normalizing for each batch, i.e. for each batch of samples
     #tensor = GaussianNoise(0.1)(tensor) 
     # downsampling loop
-    for idx, f in enumerate(filters):
+    step_filters = filters[:len(filters)] # contains all but the last filter, which is the central unit
+    dropout=None
+    for idx, f in enumerate(step_filters):
         tensor = Convolution2D(f,
                             kernel_size=(3,3),
                             padding='same',
@@ -185,8 +191,8 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
                             bias_initializer='zeros',
                             kernel_regularizer=None,
                             activation=activation)(tensor)
-        if dropout is not None:
-            tensor = Dropout({{uniform(0,1)}})(tensor) # parameter search between p_d = 0 to p_d = 1
+   #     if dropout is not None:
+   #         tensor = Dropout({{uniform(0,1)}})(tensor) # parameter search between p_d = 0 to p_d = 1
 
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
@@ -217,7 +223,7 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
     if dropout is not None:
         tensor = Dropout({{uniform(0,1)}})(tensor)
     tensor = BatchNormalization()(tensor)
-    tensor = Convolution2D(filters[1],
+    tensor = Convolution2D(filters[-1],
                           kernel_size=(3,3),
                           padding='same', 
                           use_bias=True,
@@ -228,7 +234,7 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
     tensor = BatchNormalization()(tensor)
 
     # upsampling loop
-    for idx, f in enumerate(list(reversed(filters))):
+    for idx, f in enumerate(list(reversed(step_filters))):
         tensor = UpSampling2D(size=2) (tensor) # increase dimension
 
         # Skip connection, Add() or Concatenate()
@@ -243,8 +249,8 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
                             kernel_regularizer=None,
                             activation=activation)(tensor)
 
-        if dropout is not None:
-            tensor = Dropout({{uniform(0,1)}})(tensor)
+#        if dropout is not None:
+#            tensor = Dropout({{uniform(0,1)}})(tensor)
 
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
@@ -256,8 +262,8 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
                             kernel_regularizer=None,
                             activation=activation)(tensor)
     
-        if dropout is not None:
-            tensor = Dropout({{uniform(0,1)}})(tensor)
+#        if dropout is not None:
+#            tensor = Dropout({{uniform(0,1)}})(tensor)
 
         tensor = BatchNormalization()(tensor)
     
@@ -296,8 +302,8 @@ def model(x_train, y_train, x_test, y_test,dropout=None):
     #                                                 min_delta=0.0)
 
     history = model.fit(x=generator,
-                        epochs=10,
-                        steps_per_epoch=44) # =< n_train // batch_size - artificially creates 'slow cooking' approximately 44 for training 
+                        epochs=250,
+                        steps_per_epoch=10) # =< n_train // batch_size - artificially creates 'slow cooking' approximately 44 for training 
                                             # can decay learning rate within a single epoch, if your data is huge
                                             # https://datascience.stackexchange.com/questions/47405/what-to-set-in-steps-per-epoch-in-keras-fit-generator
     test_mse = history.history['mean_squared_error']
@@ -313,19 +319,17 @@ def my_MSE_fewer_misses ( y_true, y_pred ):
 if __name__ == '__main__':
     info='testing'
     start = time.time()
-    exp_type = 'shave_mse_filter_search'
+    exp_type = 'shave_mse_filter_search_3_steps'
     unet_type = 'loop'
-    filters = [12,12]
-    parser = create_parser()
-    args = parser.parse_args()
+    
     ins_train, outs_train, ins_test, outs_test = data()
     best_run, best_model = optim.minimize(model = model,
                 data = data,
                 algo = tpe.suggest, # run TPE algorithm from hyperopt for optimization 
-                max_evals=10,        # at most 10 evaluation runs
+                max_evals=5,        # at most 10 evaluation runs
                 trials=Trials())
     model = best_model
-    with open('model_{}_{}_filters_{}.txt'.format(exp_type,unet_type, filters),'w') as f:
+    with open('{}/results_{}_best_models.txt'.format(exp_type),'w') as f:
         model.summary(print_fn=lambda x: f.write(x+'\n'))
     model.summary() 
 
@@ -346,7 +350,7 @@ if __name__ == '__main__':
     #results['history'] = history.history
 
     # Save results
-    fbase = r"results/{}_ins_{}_filters_{}_id_{}".format(exp_type,unet_type, filters,info)
+    fbase = r"results/best_model_{}".format(exp_type)
     results['fname_base'] = fbase
     fp = open("%s_results.pkl"%(fbase), "wb")
     pickle.dump(results, fp)
