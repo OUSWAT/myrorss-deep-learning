@@ -22,11 +22,9 @@ from sklearn.preprocessing import StandardScaler
 # tf.config.experimental.set_memory_growth(gpus, True)
 
 # set constants
-RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
-
-strategy = tf.distribute.MirroredStrategy()
-print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
+RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/SHAVE/scripts/results'
+#print(len(tf.config.list_physical_device('GPU')))
+#tf.config.threading.set_intra_op_parallelism_threads(8)
 id = random.randint(0,10000) # random ID for each model
 
 twice = False
@@ -36,18 +34,19 @@ def create_parser():
     parser.add_argument('-dropout', type=float, default=None, help='Enter the dropout rate (0<p<1)' )
     parser.add_argument('-lambda_regularization', type=float, default=0.1, help='Enter l1, l2, or none.') 
     parser.add_argument('-epochs', type=int, default=300, help='Training epochs')
-    parser.add_argument('-results_path', type=str, default='~/MESH_results', help='Results directory')
+    parser.add_argument('-results_path', type=str, default=RESULTS_PATH, help='Results directory')
     parser.add_argument('-lrate', type=float, default=0.001, help="Learning rate")
     parser.add_argument('-patience', type=int, default=100 , help="Patience for early termination")   
     parser.add_argument('-network',type=str,default='unet',help='Enter u-net.')
     parser.add_argument('-unet_type', type=str, default='add', help='Enter whether to concatenate or add during skips in unet')
-    parser.add_argument('-filters',type=int, default=[16,32,64], help='Enter the number of filters for convolutional network')
+    parser.add_argument('-filters',type=int, default=[12,12], help='Enter the number of filters for convolutional network')
     parser.add_argument('-batch_size',type=int, default=1, help='Enter the batch size.')
     parser.add_argument('-activation',type=str, default='relu', help='Enter the activation function.')
     parser.add_argument('-optimizer',type=str, default='adam', help='Enter the optimizer.')
     parser.add_argument('-exp_index', nargs='+', type=int, help='Array of integers')
     parser.add_argument('-type',type=str,default='regression',help='How type')
     parser.add_argument('-error',type=str,default='mse',help="What type of error?")
+    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/SHAVE/data',help="Where is the data located?")
     return parser
 
 def augment_args(args):
@@ -84,30 +83,32 @@ def augment_args(args):
     return ji.set_attributes_by_index(args.exp_index, args)
 
 def transform(var):
-    n_channels=var.shape[1]
+    print(var.shape)
+    n_channels=var.shape[3]
+    print(n_channels)
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
 
     for i in range(n_channels):
         mmx = StandardScaler()
-        slc = var[:, i, :, :].reshape(var.shape[0], 60*60) # make it a bunch of row vectors
+        slc = var[:, :, :, i].reshape(var.shape[0], 60*60) # make it a bunch of row vectors
         transformed = mmx.fit_transform(slc)
         transformed = transformed.reshape(var.shape[0], 60,60) # reshape it back to tiles
-        tdata_transformed[:, i, :, :] = transformed # put it in the transformed array
+        tdata_transformed[:, :, :, i] = transformed # put it in the transformed array
         channel_scalers.append(mmx) # store the transform
                 
     return tdata_transformed, channel_scalers
 
 def transform_test(var,scalers):
-    n_channels=var.shape[1]
+    n_channels=var.shape[3]
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
     for i in range(n_channels):
         mmx = StandardScaler()
-        slc = var[:, i, :, :].reshape(var.shape[0], 60*60)
+        slc = var[:, :, :, i].reshape(var.shape[0], 60*60)
         transformed = mmx.fit_transform(slc)
         transformed = transformed.reshape(var.shape[0], 60,60) # reshape it back to tiles
-        tdata_transformed[:, i, :, :] = transformed # put it in the transformed array
+        tdata_transformed[:, :, :, i] = transformed # put it in the transformed array
         channel_scalers.append(mmx)
     return tdata_transformed, channel_scalers
 
@@ -144,8 +145,8 @@ def my_MSE_fewer_misses ( y_true, y_pred ):
 parser = create_parser()
 args = parser.parse_args()
 
-ins = np.load('ins.npy')
-outs = np.load('outs.npy')
+ins = np.load('{}/ins.npy'.format(args.DATA_HOME))
+outs = np.load('{}/outs.npy'.format(args.DATA_HOME))
 indices = np.asarray(range(ins.shape[0]))
 
 print(ins.shape)
@@ -170,12 +171,10 @@ outs_test, scalers = transform_test(outs_test,scalers)
 # save scalers for transformation back to scale 
 pickle.dump(scalers, open('scaler_{}.pkl'.format(args.exp_type),'wb'))
 #pickle.dump(scalers, open('scaler_raw_noShear.pkl','wb'))
-
-with strategy.scope():
-    model = create_uNet(ins_train.shape[1:], nclasses=5,lambda_regularization=args.lambda_regularization,
-                        activation=args.activation, dropout=args.dropout,
-                        type=args.type, optimizer=args.optimizer,threshold=args.thres)
-with open('model_{}_{}__{}_filters_{}_id_{}".format(args.exp_type,args.kind,args.unet_type, args.filters,id),'w') as f:
+import time
+start = time.time()
+model = UNet(ins_train.shape[1:], nclasses=1)
+with open('model.txt','w') as f:
     model.summary(print_fn=lambda x: f.write(x+'\n'))
 
 model.summary() 
@@ -186,6 +185,7 @@ generator = training_set_generator_images(ins_train, outs_train, batch_size=args
                         output_name='output')
 
 early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
+                                                    monitor='mean_squared_error',
                                                     restore_best_weights=True,
                                                     min_delta=0.0)
 # Learn
@@ -198,7 +198,7 @@ early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
 
 history = model.fit(x=generator, 
                     epochs=args.epochs, 
-                    steps_per_epoch=10,
+                    steps_per_epoch=44,
                     use_multiprocessing=False, 
 #                    validation_data=(ins_val, outs_val),
                     verbose=True, 
@@ -225,7 +225,9 @@ results['outs_test_indices'] = outs_test_indices
 results['history'] = history.history
 
 # Save results
-fbase = r"results/{}_ins_{}__{}_filters_{}_id_{}".format(args.exp_type,args.kind,args.unet_type, args.filters,id)
+dataset='shave'
+exp_type='single-test_MSE'
+fbase = r"results/{}_{}".format(exp_type,dataset)
 results['fname_base'] = fbase
 fp = open("%s_results.pkl"%(fbase), "wb")
 pickle.dump(results, fp)
@@ -233,5 +235,6 @@ fp.close()
 
 # Model
 model.save("%s_model"%(fbase))
-
+end=time.time()
 print(fbase)
+print(end-start)
