@@ -200,7 +200,7 @@ early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
 # Fit the model
 history = model.fit(x=generator, 
                     epochs=args.epochs, 
-                    steps_per_epoch=44,
+                    steps_per_epoch=44, # there is a relationship to find this, search google for steps per epoch
                     use_multiprocessing=False, 
 #                    validation_data=(ins_val, outs_val),
                     verbose=True, 
@@ -225,18 +225,9 @@ results['outs_test_indices'] = outs_test_indices
 #results['folds'] = folds
 results['history'] = history.history
 
-# Save statistical results in a database
-stats, area = binary_accuracy(model, ins_test, outs_test, outs_scaler)
-correct, total, TP, FP, TN, FN, events = stats
-far = FP/(FP+TN)
-pod = TP/(TP+FN)
-csi = (TP+TN)/(TP+TN+FP+FN)
-hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-
 # Save results
-dataset='shave'
-exp_type='single-test_MSE'
+dataset='days_0_to_5'
+exp_type='plain_16_32_64'
 fbase = r"results/{}_{}".format(exp_type,dataset)
 results['fname_base'] = fbase
 fp = open("%s_results.pkl"%(fbase), "wb")
@@ -247,4 +238,12 @@ fp.close()
 model.save("%s_model"%(fbase))
 end=time.time()
 print(fbase)
-print(end-start)
+
+# Save statistical results in a database
+stats, area = binary_accuracy(results['true_testing'],results['predict_testing'], outs_scaler)
+correct, total, TP, FP, TN, FN, events = stats
+far = FP/(FP+TN)
+pod = TP/(TP+FN)
+csi = (TP+TN)/(TP+TN+FP+FN)
+hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
+row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),'runtime':end-start}
