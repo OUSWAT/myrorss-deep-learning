@@ -12,19 +12,25 @@ import random, argparse
 import numpy as np
 # from tensorflow.python.ops.numpy_ops.np_math_ops import true_divide
 from u_net_loop import *
-# from job_control import *
-import pickle
+from stats import *
+import pickle, datetime
 from sklearn.preprocessing import StandardScaler
 from stats import *
 
 # set constants
 RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
+<<<<<<< HEAD
+=======
+#print(len(tf.config.list_physical_device('GPU')))
+#tf.config.threading.set_intra_op_parallelism_threads(8)
+>>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 id = random.randint(0,10000) # random ID for each model
+HOME_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
 twice = False
 def create_parser():
     parser = argparse.ArgumentParser(description='Hail Swath Learner')    
-    parser.add_argument('-exp_type',type=str,default='mse_1999',help='How to name this model?')
+    parser.add_argument('-exp_type',type=str,default='MSE_1',help='How to name this model?')
     parser.add_argument('-dropout', type=float, default=None, help='Enter the dropout rate (0<p<1)' )
     parser.add_argument('-lambda_regularization', type=float, default=0.1, help='Enter l1, l2, or none.') 
     parser.add_argument('-epochs', type=int, default=300, help='Training epochs')
@@ -40,7 +46,12 @@ def create_parser():
     parser.add_argument('-exp_index', nargs='+', type=int, help='Array of integers')
     parser.add_argument('-type',type=str,default='regression',help='How type')
     parser.add_argument('-error',type=str,default='mse',help="What type of error?")
+<<<<<<< HEAD
     parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets',help="Where is the data located?")
+=======
+    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/SHAVE/data',help="Where is the data located?")
+    parser.add_argument('-hyperparameters_string',type=str,default='',help="What are the hyperparameters?")
+>>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
     return parser
 
 def augment_args(args):
@@ -146,54 +157,48 @@ if ins.shape[1] != 60: # if channels not last
     outs = np.reshape(outs, (outs.shape[0],60,60, 1))
 
 indices = np.asarray(range(ins.shape[0]))
-
-print(ins.shape)
-print(ins[0].itemsize*ins[0].size)
-
 ins_train, ins_test , outs_train, outs_test = train_test_split(ins, outs, test_size=0.25, random_state=3)
 ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = train_test_split(indices, indices, test_size=0.25, random_state=3)
-
 #ins_train, ins_val, outs_train, outs_val = train_test_split(ins_train, outs_train, test_size =0.2, random_state=2)
 #ins_train_indices, ins_val_indices, outs_train_indices, outs_val_indices = train_test_split(ins_train_indices, ins_train_indices, test_size =0.2, random_state=2)
-
 # scaling
 ins_train, scalers = transform(ins_train)
 # ins_val = transform_test(ins_val,scalers)
 ins_test, scalers = transform_test(ins_test,scalers)
+<<<<<<< HEAD
 pickle.dump(scalers, open('scaler_0_to_5.pkl','wb'))
 
+=======
+>>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 outs_train, scalers = transform(outs_train)
 # outs_val = transform_test(outs_val,scalers)
-outs_test, scalers = transform_test(outs_test,scalers)
-
+outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
+outs_scaler = outs_test_scalers[0] # save the transformation scaler for the true test set
 # save scalers for transformation back to scale 
+<<<<<<< HEAD
 pickle.dump(scalers, open('scaler_0_to_5.pkl'.format(args.exp_type),'wb'))
 #pickle.dump(scalers, open('scaler_raw_noShear.pkl','wb'))
+=======
+pickle.dump(outs_test_scalers, open('scaler_{}.pkl'.format(args.exp_type),'wb'))
+
+>>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 import time
 start = time.time()
-model = UNet(ins_train.shape[1:], nclasses=1)
-with open('model.txt','w') as f:
-    model.summary(print_fn=lambda x: f.write(x+'\n'))
 
-model.summary() 
+model = UNet(ins_train.shape[1:], nclasses=1) # create model
+with open('model.txt','w') as f: # save model architecture
+    model.summary(print_fn=lambda x: f.write(x+'\n'))
+model.summary() # print model architecture
 
 # experiment with smaller batch sizes, as large batches have smaller variance
 generator = training_set_generator_images(ins_train, outs_train, batch_size=args.batch_size,
                         input_name='input',
                         output_name='output')
-
 early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
                                                     monitor='mean_squared_error',
                                                     restore_best_weights=True,
                                                     min_delta=0.0)
-# Learn
-# history = model.fit(x=generator, 
-#                     epochs=epochs, 
-#                     steps_per_epoch=10,
-#                     use_multiprocessing=False, 
-#                     validation_data=(ins_val, outs_val),
-#                     verbose=True)
-
+# Fit the model
 history = model.fit(x=generator, 
                     epochs=args.epochs, 
                     steps_per_epoch=44,
@@ -204,7 +209,6 @@ history = model.fit(x=generator,
 if twice == True:
     model.compile(loss=my_MSE_fewer_misses, metrics='mse')
     history = model.fit(ins_train, outs_train,epochs=10, batch_size=370)
-
 
 results = {}
 #results['args'] = args
@@ -230,7 +234,10 @@ pod = TP/(TP+FN)
 csi = (TP+TN)/(TP+TN+FP+FN)
 hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
 row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+<<<<<<< HEAD
 
+=======
+>>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 # Save results
 dataset='shave'
 exp_type='single-test_MSE'
