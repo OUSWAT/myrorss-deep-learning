@@ -16,15 +16,17 @@ from stats import *
 import pickle, datetime
 from sklearn.preprocessing import StandardScaler
 from stats import *
+import tensorflow.keras.backend as K    
+
+K.set_image_data_format('channels_last')
+
+supercomputer = False # See line 138 where paths are set
+swatml = True
 
 # set constants
-RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
-=======
 #print(len(tf.config.list_physical_device('GPU')))
 #tf.config.threading.set_intra_op_parallelism_threads(8)
 id = random.randint(0,10000) # random ID for each model
-HOME_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
-
 twice = False
 def create_parser():
     parser = argparse.ArgumentParser(description='Hail Swath Learner')    
@@ -44,12 +46,7 @@ def create_parser():
     parser.add_argument('-exp_index', nargs='+', type=int, help='Array of integers')
     parser.add_argument('-type',type=str,default='regression',help='How type')
     parser.add_argument('-error',type=str,default='mse',help="What type of error?")
-<<<<<<< HEAD
-    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets',help="Where is the data located?")
-=======
-    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/SHAVE/data',help="Where is the data located?")
     parser.add_argument('-hyperparameters_string',type=str,default='',help="What are the hyperparameters?")
->>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
     return parser
 
 def augment_args(args):
@@ -115,7 +112,6 @@ def transform_test(var,scalers):
         channel_scalers.append(mmx)
     return tdata_transformed, channel_scalers
 
-
 def training_set_generator_images(ins, outs, batch_size=10,
                           input_name='input', 
                         output_name='output'):
@@ -141,15 +137,23 @@ def training_set_generator_images(ins, outs, batch_size=10,
 def my_MSE_fewer_misses ( y_true, y_pred ):
     return K.square(y_pred - y_true) + K.maximum((y_true - y_pred-20), 0) + K.maximum((y_pred - y_true + 10),0)
 
-
+if(swatml):
+    strategy = tf.distribute.MirroredStrategy()
+    HOME_PATH = '/home/michaelm/'
+    RESULTS_PATH = '/home/michaelm/results'
+    DATA_HOME = '/home/michaelm/data/'
+elif(supercomputer):
+    HOME_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
+    RESULTS_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
+    DATA_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets'
 
 #########################################
 # set args and train
 parser = create_parser()
 args = parser.parse_args()
 
-ins = np.load('{}/ins_days_0_to_5.npy'.format(args.DATA_HOME))
-outs = np.load('{}/outs_days_0_to_5.npy'.format(args.DATA_HOME))
+ins = np.load('{}/ins_days_0_to_5.npy'.format(DATA_HOME))
+outs = np.load('{}/outs_days_0_to_5.npy'.format(DATA_HOME))
 if ins.shape[1] != 60: # if channels not last
     ins = np.reshape(ins, (ins.shape[0], 60,60, 43))
     outs = np.reshape(outs, (outs.shape[0],60,60, 1))
@@ -163,28 +167,25 @@ ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = tr
 ins_train, scalers = transform(ins_train)
 # ins_val = transform_test(ins_val,scalers)
 ins_test, scalers = transform_test(ins_test,scalers)
-<<<<<<< HEAD
 pickle.dump(scalers, open('scaler_0_to_5.pkl','wb'))
 
-=======
->>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 outs_train, scalers = transform(outs_train)
 # outs_val = transform_test(outs_val,scalers)
 outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
 outs_scaler = outs_test_scalers[0] # save the transformation scaler for the true test set
 # save scalers for transformation back to scale 
-<<<<<<< HEAD
 pickle.dump(scalers, open('scaler_0_to_5.pkl'.format(args.exp_type),'wb'))
 #pickle.dump(scalers, open('scaler_raw_noShear.pkl','wb'))
-=======
 pickle.dump(outs_test_scalers, open('scaler_{}.pkl'.format(args.exp_type),'wb'))
 
->>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 import time
 start = time.time()
-
-model = UNet(ins_train.shape[1:], nclasses=1) # create model
-with open('model.txt','w') as f: # save model architecture
+if swatml:
+    with strategy.scope():
+        model = UNet(ins_train.shape[1:], nclasses=1)
+elif supercomputer:
+    model = UNet(ins_train.shape[1:], nclasses=1) # create model
+with open('model_0_to_5.txt','w') as f: # save model architecture
     model.summary(print_fn=lambda x: f.write(x+'\n'))
 model.summary() # print model architecture
 
@@ -232,10 +233,7 @@ pod = TP/(TP+FN)
 csi = (TP+TN)/(TP+TN+FP+FN)
 hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
 row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-<<<<<<< HEAD
 
-=======
->>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 # Save results
 dataset='shave'
 exp_type='single-test_MSE'

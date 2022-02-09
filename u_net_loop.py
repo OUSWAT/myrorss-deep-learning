@@ -37,11 +37,13 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
     tensor_list = [] # used to store high-res tensors for skip connections to upsampled tensors (The Strings in the Net)
     input_tensor = Input(shape=input_shape, name="input") # input images from sample as a tensor
     tensor = BatchNormalization()(input_tensor)     # prevents overfitting by normalizing for each batch, i.e. for each batch of samples
+    tensor = GaussianNoise(0.1)(tensor) 
     
-    #tensor = GaussianNoise(0.1)(tensor) 
-
+    filters = [16,32,64]
+    
     # downsampling loop
-    for idx, f in enumerate(filters):
+    for idx, f in enumerate(filters[:-1]):
+        print(f)
         tensor = Convolution2D(f,
                             kernel_size=(3,3),
                             padding='same',
@@ -61,10 +63,11 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
                             kernel_regularizer=None,
                             activation=activation)(tensor)
         if dropout is not None:
-            tensor = Dropout({{uniform(0,1)}})(tensor)
+            tensor = Dropout(dropout)(tensor)
         tensor = BatchNormalization()(tensor)
 
         tensor_list.append(tensor) # for use in skip
+        print(tensor_list)
 
         tensor = AveragePooling2D(pool_size=(2,2), strides=(2,2), padding='same')(tensor)
     tensor = Convolution2D(filters[-1],  # grab last filter-count
@@ -75,8 +78,7 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
                           bias_initializer='zeros',
                           kernel_regularizer=None,
                           activation=activation)(tensor)
-    if dropout is not None:
-        tensor = Dropout({{uniform(0,1)}})(tensor)
+
     tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[-1],
                           kernel_size=(3,3),
@@ -88,11 +90,10 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
                           activation=activation)(tensor)  
     tensor = BatchNormalization()(tensor)
     # upsampling loop
-    for idx, f in enumerate(list(reversed(filters))):
+    for idx, f in enumerate(list(reversed(filters[:-1]))):
         tensor = UpSampling2D(size=2) (tensor) # increase dimension
 
-        tensor = Concatenate()([tensor, tensor_list.pop()])
-
+        tensor = Concatenate()([tensor, tensor_list.pop()]) # skip connection
         tensor = Convolution2D(f,
                             kernel_size=(3,3),
                             padding='same',
