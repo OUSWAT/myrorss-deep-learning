@@ -13,6 +13,10 @@ from os import walk
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 
+def pod(file,scalers):
+    # return metrics for finding POD, FAR, CSI, etc
+    r = pd.read_pickle(file)
+    scaler = scalers[0] # the np scaler is within a list
 
 def binary_accuracy(r,scaler,group='testing'):
     # return metrics for finding POD, FAR, CSI, etc
@@ -88,6 +92,9 @@ def build_df(cases):
         print(storms)
     df = pd.DataFrame(data={'days':days,'storms':storms})
     return df
+
+def open_pickle(file):
+    pickle_data = pd.read_pickle(file
 
 # Get the cases in year
 def get_cases(year = '1999'):
