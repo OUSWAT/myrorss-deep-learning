@@ -18,7 +18,9 @@ import netCDF4
 from os import walk
 import xarray as xr
 
-
+# cases to extract from the year, from b0 to b1
+b0 = 120 
+b1 = 122
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 OUT_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data/uncropped'
@@ -32,15 +34,13 @@ lon_NW, lat_NW, lon_SE, lat_SE = -130.005, 55.005, -59.995, 19.995 # see MYRORSS
 fields = ['MergedReflectivityQC','MergedReflectivityQCComposite','MESH','MergedLLShear','MergedMLShear','Reflectivity_0C', 'Reflectivity_-10C','Reflectivity_-20C']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
 
-fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min',
-                'MergedLLShear_Min_30min','MergedMLShear_Min_30min']
+fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
 #fields = ['MergedReflectivityQC']
 ####################################
 # Troubleshooting file
 trouble = "trouble.txt"
 with open(trouble,"w") as f:
     pass
-
 #os.system('makeIndex.pl /condo/swatwork/mcmontalbano/MYRORSS/data/uncropped/1999/19990103 code_index.xml')
 #sys.exit()
 
@@ -68,30 +68,34 @@ def extract(day):
  
     for field in fields:
         if field == 'MergedLLShear' or field == 'MergedMLShear':
-            try:
-                os.system('tar -xvf {}/{}/Azshear/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
-            except:
-                os.system('tar -xvf {}/{}/azimuthal_shear_only/{}.tar {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+            #ry:
+            #   os.system('tar -xvf {}/{}/Azshear/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+            #xcept:
+            os.system('tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+            print('tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
         else:
-            os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
-            field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field)
-            subdirs = os.listdir(field_path)
-            for subdir in subdirs:
-                files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
-                for f in files:
-                    try:
-                        filename = '{}/{}/{}'.format(field_path, subdir, f)
-                        infile = gzip.open(filename,'rb')
-                        tmp = tempfile.NamedTemporaryFile(delete=False)
-                        shutil.copyfileobj(infile, tmp)
-                        infile.close()
-                        tmp.close()
-                        data = netCDF4.Dataset(tmp.name)
-                        dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
-                        dataset.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path, subdir, f[:15]))
-                    except:
-                        pass    
-                   # except:
+            os.system('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field)) #untar it to field path
+            print('tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
+        field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field) # pointing to the field in the uncropped directory
+        subdirs = os.listdir(field_path)                           # list the directories within the field
+        for subdir in subdirs:                                     # usually a dummy directory like '00.00' or '00.25'
+            files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
+            for f in files:
+                try:
+                    # convert from .gz to .netcdf
+                    filename = '{}/{}/{}'.format(field_path, subdir, f)
+                    infile = gzip.open(filename,'rb')
+                    tmp = tempfile.NamedTemporaryFile(delete=False)
+                    shutil.copyfileobj(infile, tmp)
+                    infile.close()
+                    tmp.close()
+                    data = netCDF4.Dataset(tmp.name)
+                    dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
+                    dataset.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path, subdir, f[:15]))
+                except:
+                    pass    
+    return    
+               # except:
                    #     print('fields, first loop exception: {}/{}/{}'.format(field_path, subdir, f[:15]))
                             
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
@@ -118,7 +122,7 @@ def extract_NSE(day):
             except:
                 pass
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
-        
+    return   
 def localmax(day):
     '''
     Given a day in YYYYMMDD, run w2localmax
@@ -137,6 +141,7 @@ def localmax(day):
     os.system('makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day))
     os.system('w2table2csv -i {}/{}/code_index.xml -T MergedReflectivityQCCompositeMaxFeatureTable -o {}/{}/csv -h'.format(myrorss_path,day,myrorss_path,day))
     return
+
 
 def get_storm_info(day):
     year = day[:4] 
@@ -218,6 +223,7 @@ def accumulate(day, fields):
         os.system('w2accumulator -i {}/{}/{}/code_index.xml -g {} -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, date, field,OUT_HOME,year,date))
         if field[8:] == 'Shear':
             os.system('w2accumulator -i {}/{}/{}/code_index.xml -g {} -o {}/{}/{} -C 3 -t 30 --verbose="severe"'.format(OUT_HOME,year, date, field, OUT_HOME,year, date))
+    return
 
 def cropconv(case_df, date):
     # this also needs reform    
@@ -225,7 +231,7 @@ def cropconv(case_df, date):
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
     #os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
     
-    fields = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
+    fields_ = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
  
     with open('trouble.txt',"a") as o:
         print(case_df,file=o)
@@ -250,7 +256,7 @@ def cropconv(case_df, date):
         # crop input
         #########################
         os.system("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2)) # make index for uncropped
-        for field in fields:
+        for field in fields_:
             os.system('w2cropconv -i {}/{}/{}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,year,date, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         with open('trouble.txt','a') as o:
             print('input {} {}'.format(time1,time2),file=o)
@@ -279,6 +285,8 @@ def cropconv(case_df, date):
             os.system('w2cropconv -i {}/{}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, field, myrorss_path,date, idx, latNW, lonNW,latSE,lonSE))
         # commenting this out for repair
         # os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,#date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
+    return
+
 
 def get_NSE(date,fields):
     year = date[:4]
@@ -298,21 +306,28 @@ def get_training_cases(year = '1999'):
 def main():
 
    #year = sys.argv[1]
+    #b0 = sys.argv[1]
+    #b1 = sys.argv[2]
     # extract first 10 cases of the year (b1 to b2)
     fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
    #b1 = 80
    #b2 = 103
-    days = get_cases(year='1999')
-    finished_days = get_training_cases(year='1999')
-    days = [x for x in days if x not in finished_days] # subtracts the finished days from days.
-    days = np.random.choice(days, 4,replace=False)
+    #b0=0
+    #b1=5
+    days = get_cases(year='2011')[b0:b1]
+    #finished_days = get_training_cases(year='2011')
+    #ays = [x for x in days if x not in finished_days] # subtracts the finished days from days.
+    #ays = np.random.choice(days, ,replace=False)
 
     start = time.time() # start time
+   # days = ['20110326','20110520']
     for day in days:
         year = day[:4]
         extract(day)
+        print('extracting NSE \n \n \n')
         extract_NSE(day)
         localmax(day)
+       # print('finished localmaxing')
         storms = get_storm_info(day) # use mergedtable from localmax to store locations       
         accumulate(day,fields[1:])
         cropconv(storms,day)

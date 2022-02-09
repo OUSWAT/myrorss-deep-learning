@@ -15,16 +15,10 @@ from u_net_loop import *
 # from job_control import *
 import pickle
 from sklearn.preprocessing import StandardScaler
-# We could use the orientation angle outputed from spatialvx to rotate the images so that 
-# they are all on the same axis.
-
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpus, True)
+from stats import *
 
 # set constants
-RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/SHAVE/scripts/results'
-#print(len(tf.config.list_physical_device('GPU')))
-#tf.config.threading.set_intra_op_parallelism_threads(8)
+RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
 id = random.randint(0,10000) # random ID for each model
 
 twice = False
@@ -46,7 +40,7 @@ def create_parser():
     parser.add_argument('-exp_index', nargs='+', type=int, help='Array of integers')
     parser.add_argument('-type',type=str,default='regression',help='How type')
     parser.add_argument('-error',type=str,default='mse',help="What type of error?")
-    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/SHAVE/data',help="Where is the data located?")
+    parser.add_argument('-DATA_HOME',type=str,default='/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets',help="Where is the data located?")
     return parser
 
 def augment_args(args):
@@ -145,8 +139,12 @@ def my_MSE_fewer_misses ( y_true, y_pred ):
 parser = create_parser()
 args = parser.parse_args()
 
-ins = np.load('{}/ins.npy'.format(args.DATA_HOME))
-outs = np.load('{}/outs.npy'.format(args.DATA_HOME))
+ins = np.load('{}/ins_days_0_to_5.npy'.format(args.DATA_HOME))
+outs = np.load('{}/outs_days_0_to_5.npy'.format(args.DATA_HOME))
+if ins.shape[1] != 60: # if channels not last
+    ins = np.reshape(ins, (ins.shape[0], 60,60, 43))
+    outs = np.reshape(outs, (outs.shape[0],60,60, 1))
+
 indices = np.asarray(range(ins.shape[0]))
 
 print(ins.shape)
@@ -162,14 +160,14 @@ ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = tr
 ins_train, scalers = transform(ins_train)
 # ins_val = transform_test(ins_val,scalers)
 ins_test, scalers = transform_test(ins_test,scalers)
-
+pickle.dump(scalers, open('scaler_0_to_5.pkl','wb'))
 
 outs_train, scalers = transform(outs_train)
 # outs_val = transform_test(outs_val,scalers)
 outs_test, scalers = transform_test(outs_test,scalers)
 
 # save scalers for transformation back to scale 
-pickle.dump(scalers, open('scaler_{}.pkl'.format(args.exp_type),'wb'))
+pickle.dump(scalers, open('scaler_0_to_5.pkl'.format(args.exp_type),'wb'))
 #pickle.dump(scalers, open('scaler_raw_noShear.pkl','wb'))
 import time
 start = time.time()
@@ -223,6 +221,15 @@ results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
 results['outs_test_indices'] = outs_test_indices
 #results['folds'] = folds
 results['history'] = history.history
+
+# Save statistical results in a database
+stats, area = binary_accuracy(model, ins_test, outs_test, outs_scaler)
+correct, total, TP, FP, TN, FN, events = stats
+far = FP/(FP+TN)
+pod = TP/(TP+FN)
+csi = (TP+TN)/(TP+TN+FP+FN)
+hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
+row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 # Save results
 dataset='shave'
