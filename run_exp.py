@@ -19,11 +19,9 @@ from stats import *
 
 # set constants
 RESULTS_PATH='/condo/swatcommon/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
-<<<<<<< HEAD
 =======
 #print(len(tf.config.list_physical_device('GPU')))
 #tf.config.threading.set_intra_op_parallelism_threads(8)
->>>>>>> 52f3afdc6ea4dfdd4295315a8970e57629bbdc15
 id = random.randint(0,10000) # random ID for each model
 HOME_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
