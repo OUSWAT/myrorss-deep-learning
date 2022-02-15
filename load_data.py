@@ -8,6 +8,10 @@
 # Returns: 
 # @param ins - the inputs for the dataset
 # @param outs - the outputs for the dataset 
+# TODO: 
+# 1. edit load_while() with just shape echekck
+#
+# Functions: get_cases, get_training_cases, load_while() 
 
 import datetime, sys, os, random
 from os import walk
@@ -23,18 +27,14 @@ NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorM
 products = multi_fields + NSE_fields
 
 # INPUT VARIABLES HERE
-# make this more elegant, to input from the shell. check extract.py
+# make this more elegant, to input from the shell. check e0xtract.py
 #year=str(sys.argv[1])
 #b0=int(sys.argv[2])
 #b1=int(sys.argv[3])
-year='1999'
-b0=15
-b1=20
-num_cases=3 # idk hat this is, but im scared of breaking the code
+year='2011'
+
 # Get the cases in year
-def get_cases(year = '1999',b0,b1):
-    b0 = b0
-    b1 = b1
+def get_cases(year):
     cases = []
     path = '{}/{}'.format(TRAINING_HOME,year)
     possible_storms = os.listdir(path)
@@ -43,17 +43,18 @@ def get_cases(year = '1999',b0,b1):
             cases.append(storm[:8])
     return cases
 
-def load_while(year,b0=0,b1=5):
+def load_while(year):
     '''
     Given a year and bounds for days, this will return ins and outs
     @param year - the chosen year
     @param b0 - lower-bound (i.e. b0 = 0 is day 1 of the year)
     @param b1 - upper-bound 
     '''
-
     ins_full = []
     outs_full = []
-    days = get_cases('1999',b0,b1)
+    days = get_cases(year)
+    print(days)
+    days = ['20110326','20110520','20110501']
     for day in days:
         year = day[:4]
         storm_path = '{}/{}/{}'.format(TRAINING_HOME,year,day)
@@ -146,23 +147,16 @@ def load_while(year,b0=0,b1=5):
                         ins = np.asarray(ins)
                         outs = np.asarray(outs)
                         if np.asarray(ins).shape == (43, 60, 60) and np.asarray(outs).shape == (1, 60, 60):
+                            print('success')
                             ins_full.append(ins)
                             outs_full.append(outs)
                             missing=True # reset missing
                             break # reset, exit loop, move to new storm directory
                         else:
-                            print('something is missing and ins shape is:',np.asarray(ins).shape)
+                            #print('MISSING, ins.shape: {}, {}'.format(np.asarray(ins).shape,file_path))
                             missing = True
                             break
     return ins_full, outs_full
-
-ins, outs = load_while(year=year,b0=b0,b1=b1) # load
-ins = np.asarray(ins)
-outs = np.asarray(outs)
-np.save('datasets/ins_days_{}_to_{}.npy'.format(b0,b1),ins)
-np.save('datasets/outs_days_{}_to_{}.npy'.format(b0,b1),outs)
-
-sys.exit()
 
 # Build pandas dataframe of days and the number of storms in each day
 def build_df(cases):
@@ -187,21 +181,17 @@ def modify_ins(ins,indices):
         ins = ins[:,:,:,idx]*0
     return ins
 
-#cases = get_cases(1999) # these are the cases which have already been run.
-#insfull, outsfull = load_data(cases)
-#print(ins_full)
-
-ins_full, outs_full = load_while(year=year,b0=b0,b1=b1) # load
-ins = np.asarray(ins_full) # convert to np array
-outs = np.asarray(outs_full)
-print(outs)
+#def main():
+ins, outs = load_while(year=year) # load
+print(ins,outs)
+ins = np.asarray(ins)
+outs = np.asarray(outs)
 ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
 outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 
-ins = np.squeeze(ins)
-outs = np.squeeze(outs)
+np.save('datasets/ins_2011.py',ins)
+np.save('datasets/outs_2011.npy',outs)
 
-np.save('datasets/ins_days_{}_to_{}.npy'.format(b0,b1),ins)
-np.save('datasets/outs_days_{}_to_{}.npy'.format(b0,b1),outs)
-#print(insfull.shape,outsfull.shape)
+#if __name__ == '__main__':
+#    main()
 
