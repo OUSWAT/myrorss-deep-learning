@@ -1,6 +1,12 @@
 ########################################
 # Functions for stats and model analysis
 # Author: Michael Montalbano
+#
+# TODO:
+#       1. stats() funct that returns POD, FAR, CSI, etc (Roebber 2008)
+#       2. Taylor (2001) performance graph
+#	2. MED() for mean_error_distance (use networkx) 
+#       3. Check for dependence on lat,lon
 
 import pickle, sys, os
 import numpy as np
@@ -8,20 +14,24 @@ import pandas as pd
 from netCDF4 import Dataset
 from os import walk
 
-
-
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
+HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
-def pod(file,scalers):
-    # return metrics for finding POD, FAR, CSI, etc
-    r = pd.read_pickle(file)
-    scaler = scalers[0] # the np scaler is within a list
+def stats(y_true, y_pred,scaler):
+    # return metrics for finding POD, FAR, CSI, etc (Roebber 2008)
+    container, c = binary_accuracy(y_true, y_pred, scaler)
+    correct, total, TP, FP, TN, FN, events = [x for x in container]   
+    POD = TP/(TP + FN)
+    FAR = FN/(TP + FP) # SR = 1 - FAR 
+    bias = (TP + FP)/(TP + FN)
+    CSI = TP / (TP + FP + FN)
+    return [POD, FAR, bias, CSI]
 
-def binary_accuracy(r,scaler,group='testing'):
+def binary_accuracy(y_true,y_pred,scaler):
     # return metrics for finding POD, FAR, CSI, etc
-    y_true = r['true_testing']
-    y_pred = r['predict_testing']
+    y_true = y_true
+    y_pred = y_pred
 
     # scale data back to mm
     correct = 0
@@ -94,8 +104,8 @@ def build_df(cases):
     return df
 
 def open_pickle(file):
-    pickle_data = pd.read_pickle(file
-
+    r = pd.read_pickle(file)
+    return r
 # Get the cases in year
 def get_cases(year = '1999'):
     cases = []
@@ -105,5 +115,22 @@ def get_cases(year = '1999'):
         if storm[:4] == year:
             cases.append(storm[:8])
     return cases
+
+def load_npy(prefix='outs'):
+    files = os.listdir('{}/{}'.format(HOME_HOME,'datasets'))
+    names = []
+    for idx, f in enumerate(files[:-1]): # collect all npys fname prefix
+        if f[:2] == prefix[:2]:
+            names.append(f)
+    # data is a list containing each npy
+    data = [np.load('{}/datasets/{}'.format(HOME_HOME,x)) for x in names]
+    # correct :the shape check
+    for idx, d in enumerate(data):
+        if d.shape[1:3] != (60, 60):
+            d = np.reshape(d, (d.shape[0], 60, 60, d.shape[1]))
+            data[idx] = d
+    # connect npys in a single npy
+    data = np.concatenate(data, axis=0)
+    return data
 
 
