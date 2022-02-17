@@ -8,11 +8,12 @@
 #	2. MED() for mean_error_distance (use networkx) 
 #       3. Check for dependence on lat,lon
 
-import pickle, sys, os
+import pickle, sys, os, glob
 import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 from os import walk
+from collections import Counter
 
 multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
@@ -121,6 +122,7 @@ def get_cases(year = '1999'):
     return cases
 
 def load_npy(prefix='outs'):
+    # load npy with prefix and return as single np array (or npy)
     files = os.listdir('{}/{}'.format(HOME_HOME,'datasets'))
     names = []
     for idx, f in enumerate(files[:-1]): # collect all npys fname prefix
@@ -137,58 +139,44 @@ def load_npy(prefix='outs'):
     data = np.concatenate(data, axis=0)
     return data
 
-# check if any of files in storm directory are missing
-#
-def check_storm(date):
+# check if any of files in storm directory are missing using glob
+def check_missing(date):
     """
     Purpose: check if storm is missing
     Returns:
-        @param number of missing cases
-        @param number of total cases
+        @param dataframe for each date
+        df attributes: stormID (str), missing (boolean), missing_fields (list)
     """
-    storms_dir = '{}/{}/{}'.format(TRAINING_HOME,date[:4],date)
-    storms = sorted(os.listdir(storms_dir))
-    df = pd.DataFrame(columns=['storm','missing'])
+    storms_dir = '{}/{}/{}'.format(TRAINING_HOME,date[:4],date) # path to storm directory
+    storms = sorted(os.listdir(storms_dir)) # list of storms
+    df = pd.DataFrame(columns=['storm','missing','miss_fields'])
     for storm in storms:
-        if storm[:5] == 'storm' and storm[:6] != 'storms':
-            missing = False
-            n_missing = 0
-            for p in products:
-                if p in NSE_fields:
-                    # check if the NSE/product/.netcdf file is missing
-                    file_list = os.listdir('{}/{}/NSE/{}'.format(storms_dir,storm,p))
-                    if len(file_list) == 0:
-                        missing = True
-                        # note that p is missing in a pandas database
-                        n_missing+=1
-                        break
-                if p == 'MergedReflectivityQC':
-                    # check if any of the MergedReflectivityQC files are missing
-                    degrees = os.listdir('{}/{}/MergedReflectivityQC/'.format(storms_dir, storm))
-                    for degree in degrees: # check 
-                        if len(os.listdir('{}/{}/MergedReflectivityQC/{}'.format(storms_dir, storm, degree))) == 0:
-                            missing = True
-                            n_missing+=1
-                            break
-                if p == 'target_MESH_Max_30min':
-                    # check if any of the target_MESH_Max_30min files are missing
-                    targ_dirs = os.listdir('{}/{}/target_MESH_Max_30min/'.format(storms_dir, storm))
-                    if 'MESH_Max_30min' not in targ_dirs:
-                        missing = True
-                        n_missing+=1
-                        break
-                    else:
-                        if len(os.listdir('{}/{}/target_MESH_Max_30min/MESH_Max_30min'.format(storms_dir, storm))) == 0:
-                            missing = True
-                            n_missing+=1
-                            break
-                if p in multi_fields and p != 'target_MESH_Max_30min':
-                    dummy_dir = os.listdir('{}/{}/{}'.format(storms_dir, storm, p))[0]
-                    if len(os.listdir('{}/{}/{}/{}'.format(storms_dir, storm, p, dummy_dir))) == 0:
-                        missing = True
-                        n_missing+=1
-                        break
-                n_missing+=1
-            df = df.append({'storm':storm, 'missing': n_missing}, ignore_index=True)
-                    # check if any of the multi_fields files are missing                 
+        # use glob to check if any of the files are missing
+        dirs = sorted(glob.glob('{}/{}/{}/*'.format(TRAINING_HOME,date[:4],date)), reverse = True) # sort the dirs in reverse order
+        for d in dirs:
+            if int(d[-1]): # check if the last char is a number
+                missing, fields = check_storm(d)
+                try:
+                    missing_fields = list((Counter(fields) - Counter(products).elements()))
+                except:
+                    missing_fields = fields
+                df = df.append({'storm':storm,'missing':missing,'miss_fields':fields}, ignore_index=True)
     return df
+
+def check_storm(storm_path):
+    # given a storm path, check if any of the files are missing
+    storm_path = storm_path
+    # find all files in storm path
+    files = []
+    fields = []
+    for f in glob.glob('{}/**/*.netcdf'.format(storm_path),recursive = True): # recursively returns all files at any depth ending in .netcdf
+        field = f.split('/')[-3]
+        if field in fields:
+            continue # if the field is already in the list, skip
+        fields.append(field)
+        files.append(f)
+    if len(files) != 44:
+        missing = True
+    else:
+        missing = False
+    return missing, fields 
