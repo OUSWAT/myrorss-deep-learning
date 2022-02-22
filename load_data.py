@@ -53,7 +53,7 @@ def load():
     for day in days:
         storm_path = '{}/{}/{}'.format(TRAINING_HOME,day[:4],day)
 
-def load_data(year);
+def load_data(year):
     # cycle through days
     # for each day, cycle through storms
     # for each storm, if no data is missing, add to ins and outs
@@ -93,7 +93,7 @@ def load_data(year);
                 if fname not in files:
                     all_files.append(fname)
             print('path: {} and n_files = {}'.format(storm_path,len(all_files)))
-    return
+    return None
 
 def load_while(year):
     '''
