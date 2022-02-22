@@ -5,6 +5,7 @@ from netCDF4 import Dataset
 from os import walk
 from collections import Counter
 import datetime
+import matplotlib.pyplot as plt
 
 multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
@@ -16,6 +17,18 @@ print(len(degrees) + len(products))
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
+
+# make hist of maxes
+def max_hist(images, title='Max MESH'):
+    maxes = []
+    for img in images:
+        maxes.append(img.max())
+    plt.hist(maxes)
+    plt.xlim([0,140])
+    plt.ylabel('Number of Images')
+    plt.xlabel('MESH (mm)')
+    plt.savefig('{}.png'.format(title))
+    return None
 
 def check_year(year='2011'):
     '''
@@ -53,43 +66,42 @@ def check_day(date='20110409'):
     storms = sorted(os.listdir(storms_dir)) # list of storms
 
     os.system('mv {}/*.csv /{}/csv'.format(storms_dir, storms_dir)) # move all csvs into a csv folder
-    print(len(degrees) + len(products))
     # removes dirs like code_index.fam
     df = pd.DataFrame(columns={'storm','missing','miss_fields'})
     dirs = sorted(glob.glob('{}/{}/{}/*'.format(TRAINING_HOME, date[:4], date)),reverse = True)    
-    i=0
     for storm_path in dirs:
         storm = storm_path.split('/')[-1] # grab last element, the stormID
         if storm[:5] != 'storm':
             continue # if it's not a storm directory, skip
-        missing, fields = check_storm(storm_path,i)
-        print('storm_path:',storm_path)
+        missing, fields = check_storm(storm_path)
         diff = []
         res = [ element for element in products]
         for f in fields:
             if f in products:
                 res.remove(f)
-        if i ==200:
-            print
         else:
             fields = fields
-        print('2nd')
-        print(storm,fields,missing)
         df = df.append({'storm':storm,'missing':missing,'miss_fields':fields}, ignore_index=True)
-        i+=1
     df.to_csv('{}/missingness.csv'.format(storms_dir))# save
     return df
 
-def check_storm(storm_path,i):
+def check_storm(storm_path):
     # given a storm path, check if any of the files are missing
     storm_path = storm_path
     # find all files in storm path
     files = []
     fields = []
     files = glob.glob('{}/target*/**/*.netcdf'.format(storm_path),recursive = True)
-    print(files)
-    f = files[0] # grab the first file. Maybe sort and grab the latest
-    
+    if len(files) > 1:
+        print(sorted(files))
+        f = files[0] # grab the first file. Maybe sort and grab the latest
+    else:
+        try:
+            f = files[0]
+        except:
+            missing = True # target is missing 
+            fields = ['target_MESH_Max_30min'] # missing field = target
+            return missing, fields
     target_time = str(f.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
     target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")#
     input_time = (target_time+datetime.timedelta(minutes=-30)).strftime('%Y%m%d-%H%M%S')
@@ -97,14 +109,11 @@ def check_storm(storm_path,i):
     print("'\n\n\'")
     for fname in glob.glob('{}/**/*.netcdf'.format(storm_path),recursive = True): # recursively returns all files at any depth ending in .netcdf
         field = fname.split('/')[-3] # grab field
-        print('field',field)
         if field in fields:
             fields.append(field) # append all fields. (len = 51)
         # get the input time 
         if field in products and field != 'target_MESH_Max_30min' and field not in NSE_fields:
             f_time = get_time_from_fname(fname)
-            print(f_time, target_time, field)
-            print('=========================', f_time == target_time)
             if f_time != target_time and fname not in files: # check whether the input time = target time
                 files.append(fname)       # if it does, append it
     # get NSE files
@@ -112,17 +121,11 @@ def check_storm(storm_path,i):
         f_time = get_time_from_fname(fname)
         if fname not in files:
             files.append(fname)
-    print(len(files))
-    print(len(features))
-    for idx, file in enumerate(sorted(files)):
-        print(file)
         
     if len(files) != len(features)-1: # subtract one because MergedReflectivtyQC is represented by the degrees
         missing = True
     else:
         missing = False
-    print('1rst')
-    print(fields)
     return missing, fields
 
 def get_time_from_fname(fname):
@@ -136,6 +139,25 @@ def get_storms(date):
     storms = sorted(os.listdir(storms_dir)) # list of storms
     return storms
 
+def load_npy(prefix='outs'):
+    # load npy with prefix and return as single np array (or npy)
+    files = os.listdir('{}/{}'.format(HOME_HOME,'datasets'))
+    names = []
+    for idx, f in enumerate(files[:-1]): # collect all npys fname prefix
+        if f[:2] == prefix[:2]:
+            names.append(f)
+    # data is a list containing each npy
+    data = [np.load('{}/datasets/{}'.format(HOME_HOME,x)) for x in names]
+    # correct :the shape check
+    for idx, d in enumerate(data):
+        if d.shape[1:3] != (60, 60):
+            d = np.reshape(d, (d.shape[0], 60, 60, d.shape[1]))
+            data[idx] = d
+    # connect npys in a single npy
+    data = np.concatenate(data, axis=0)
+    return data
+
+
 def remove_missing(year='2011'):
     # simple function to remove storms that are missing
     days = get_days(year) # retrieve days in training_data
@@ -143,11 +165,14 @@ def remove_missing(year='2011'):
         check_day(day)
         missing_df_path = '{}/{}/{}/missingness.csv'.format(TRAINING_HOME, day[:4], day)
         missing_df = pd.read_csv(missing_df_path)
+        print(missing_df)
+
         for idx, row in missing_df.iterrows():
             stormID = row['storm']
             missing = row['missing']
             if missing == True:
                 os.system('rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) # remove missing
+                print(' rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) 
 def main():
     remove_missing()
 
