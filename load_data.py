@@ -19,7 +19,11 @@ import numpy as np
 import pandas as pd
 from ast import literal_eval
 from netCDF4 import Dataset
+<<<<<<< HEAD
 import glob, util
+=======
+import util
+>>>>>>> 602bdd9480fe73ff195c742b206a2bcff3782c1b
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
@@ -104,9 +108,9 @@ def load_while(year):
     '''
     ins_full = []
     outs_full = []
-    days = get_cases(year)
+    days = util.get_days(year)
     print(days)
-    days = ['20110326','20110520','20110501']
+    days = ['20110409']
     for day in days:
         year = day[:4]
         storm_path = '{}/{}/{}'.format(TRAINING_HOME,year,day)
@@ -129,7 +133,7 @@ def load_while(year):
                                     ins.append(np.array(nc.variables[field][:]))
                                 except:
                                     print('{}/{}/{}/{}/{}'.format(storm_path,subdir,field,field_path,files[0]))
-                                    missing = True
+                                    missing = True 
                                     break
                                 var = nc.variables[field][:,:]
                                 var = np.where(var<-100,0,var)
@@ -140,7 +144,7 @@ def load_while(year):
                                 subdirs2 = os.listdir('{}/{}/{}'.format(storm_path,subdir,field))
                             except:
                                 print('{}/{}/{}'.format(storm_path,subdir,field))
-                                missing = True
+                                missing = True 
                                 break
                             for subdir2 in subdirs2:
                                 if subdir2[2] == '.':
@@ -150,7 +154,7 @@ def load_while(year):
                                     elif len(files)==1 and files != []:
                                         f = files[0]
                                     else:
-                                        missing=True
+                                        missing=True 
                                         print('there was a missing file with the following path: {}/{}/{}/{}/{}'.format(storm_path,subdir,field,subdir2,f))
                                         break
                                     file_path = '{}/{}/{}/{}/{}'.format(storm_path,subdir,field,subdir2,f)
@@ -158,7 +162,7 @@ def load_while(year):
                                         nc = Dataset(file_path, mode='r')
                                     except:
                                         print('missing',file_path)
-                                        missing=True
+                                        missing=True 
                                         break
                                     var = nc.variables[field][:,:]
                                     var = np.where(var<-50,0,var)
@@ -184,7 +188,7 @@ def load_while(year):
                                 nc = Dataset(file_path,mode='r')
                             except:
                                 print('missing',file_path)
-                                missing = True # if no files, then missing
+                                missing = True# if no files, then missing
                                 break
                             var = nc.variables['MESH_Max_30min'][:,:]
                             var = np.where(var<-10,0,var)
@@ -195,19 +199,20 @@ def load_while(year):
                                 missing=True
                                 break
                             outs.append(var)
-                    if not missing:
-                        ins = np.asarray(ins)
-                        outs = np.asarray(outs)
-                        if np.asarray(ins).shape == (43, 60, 60) and np.asarray(outs).shape == (1, 60, 60):
-                            print('success')
-                            ins_full.append(ins)
-                            outs_full.append(outs)
-                            missing=True # reset missing
-                            break # reset, exit loop, move to new storm directory
-                        else:
-                            #print('MISSING, ins.shape: {}, {}'.format(np.asarray(ins).shape,file_path))
-                            missing = True
-                            break
+                   #if not missing:
+                    ins = np.asarray(ins)
+                    outs = np.asarray(outs)
+                    print(ins.shape)
+                    if np.asarray(outs).shape == (1, 60, 60):
+                        print('success')
+                        ins_full.append(ins)
+                        outs_full.append(outs)
+                        missing=True # reset missing
+                        break # reset, exit loop, move to new storm directory
+                    else:
+                        #print('MISSING, ins.shape: {}, {}'.format(np.asarray(ins).shape,file_path))
+                        missing = True
+                        break
     return ins_full, outs_full
 
 # Build pandas dataframe of days and the number of storms in each day
@@ -235,14 +240,14 @@ def modify_ins(ins,indices):
 
 #def main():
 ins, outs = load_while(year=year) # load
-print(ins,outs)
-ins = np.asarray(ins)
+#print(ins,outs)
+#ins = np.asarray(ins)
 outs = np.asarray(outs)
-ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+#ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
 outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 
-np.save('datasets/ins_2011.py',ins)
-np.save('datasets/outs_2011.npy',outs)
+#np.save('datasets/ins_june_18_19.npy',ins)
+np.save('datasets/outs_20110409.npy',outs)
 
 #if __name__ == '__main__':
 #    main()
