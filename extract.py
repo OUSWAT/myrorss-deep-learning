@@ -18,6 +18,8 @@ import netCDF4, glob
 from os import walk
 import xarray as xr
 import util 
+from netCDF4 import Dataset
+
 # cases to extract from the year, from b0 to b1
 b0 = 120 
 b1 = 122
@@ -147,7 +149,7 @@ def get_storm_info(day):
     year = day[:4] 
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
     LOCALMAX_PATH = '{}/{}/csv'.format(myrorss_path, day)
-    case_df = pd.DataFrame(columns={"timedate","Latitude","Longitude","Storm","Reflectivity"})
+    case_df = pd.DataFrame(columns={"timedate","Latitude","Longitude","Storm","Reflectivity","is_Storm"})
     i=+1
     delta = 0.15
     # builds dataframe of case centers
@@ -206,7 +208,7 @@ def get_storm_info(day):
                     else:
                         row_idx = key
                         try:
-                            row = {"timedate":timedate,"Latitude":df['#Latitude'].iloc[row_idx],"Longitude":df['Longitude'].iloc[row_idx],'Storm':df['RowName'].iloc[row_idx],'Reflectivity':df['MergedReflectivityQCCompositeMax'].iloc[row_idx]}
+                            row = {"timedate":timedate,"Latitude":df['#Latitude'].iloc[row_idx],"Longitude":df['Longitude'].iloc[row_idx],'Storm':df['RowName'].iloc[row_idx],'Reflectivity':df['MergedReflectivityQCCompositeMax'].iloc[row_idx], 'is_Storm':False}
                         except:
                             print(row_idx)
                         case_df.loc[len(case_df.index)] = row
@@ -214,12 +216,13 @@ def get_storm_info(day):
     case_df.to_csv('{}/{}/{}/csv/storms.csv'.format(TRAINING_HOME, year, day))
     return case_df
 
-def check_MESH(storms_df):
-    
-    if not os.path.isdir('{}/{}/{}/MESH_Max_30min'.format(OUT_HOME, year, date)):
-        os.system('w2accumulator -i {}/{}/{}/code_index.xml -g MESH -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, date,OUT_HOME,year,date))
+def check_MESH(storms_df, day):
+    # Check whether the input MESH swath is above a threshold to ensure that hailstorms are chosen, not fledgeling storms 
+    year = day[:4] # whatever
+    if not os.path.isdir('{}/{}/{}/MESH_Max_30min'.format(OUT_HOME, year, day)):
+        os.system('w2accumulator -i {}/{}/{}/code_index.xml -g MESH -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, day,OUT_HOME,year,day))
 
-    for idx, row in case_df.iterrows():
+    for idx, row in storms_df.iterrows():
         
         lon = row['Longitude']
         lat = row['Latitude']
@@ -234,12 +237,39 @@ def check_MESH(storms_df):
         time2 = (date1 + datetime.timedelta(minutes=2, seconds=30)).strftime('%Y%m%d-%H%M%S')         
 
         # crop MESH
-        os.system("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2)) # make index for uncropped
-        os.system('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, OUT_HOME, year, date, latNW, lonNW, latSE, lonSE))
-        print('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, OUT_HOME, year, date, latNW, lonNW, latSE, lonSE))
-        # check for sufficient MESH pixels
+        os.system("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, day, time1, time2)) # make index for uncropped
+        os.system('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min -o {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, day, OUT_HOME, year, day, latNW, lonNW, latSE, lonSE))
         
+        # check for sufficient MESH pixels
+        MESH_dir = '{}/{}/{}/test_MESH'.format(OUT_HOME, year, day)
+        # open MESH file
+        f = glob.glob('{}/**/*netcdf'.format(MESH_dir))
+        nc = Dataset(f)
+        print(nc.max())
+        
+        # Decide whether it meets the conditions 
+        keep = decide(nc)
+        # wipe dir
+        os.system('rm {}/*'.format(MESH_dir)) 
+        # modify is_Storm column of storms_df
+        storms_df[idx, 'is_Storm'] = keep # set is_Storm to true or false
+    return None
 
+def decide(image):
+    # given a MESH image, decide whether to keep the sample
+    # take a subset in the center
+    image = np.squeeze(image)
+    image = image[15:45,15:45]
+    MESH_pixels = 0 
+    for row in image:
+        for pixel in row:
+            if pixel > 10: 
+                MESH_pixels+=1
+
+    if MESH_pixels > 10:
+        return True
+    else:
+        return False
 
 def accumulate(day, fields):
     date = day
@@ -264,6 +294,8 @@ def cropconv(case_df, date):
     with open('trouble.txt',"a") as o:
         print(case_df,file=o)
     for idx, row in case_df.iterrows():
+        if row['is_Storm'] == False:
+            continue # skip
         print(row)
         # if idx <= 200:
         #     continue
@@ -359,7 +391,7 @@ def main():
        # localmax(day)
         print('finished localmaxing')
         storms = get_storm_info(day) # use mergedtable from localmax to store locations     
-        check_MESH(storms)   
+        check_MESH(storms,day)
        # storms = pd.read_csv('{}/{}/{}/csv/storms.csv'.format(TRAINING_HOME, day[:4], day))
        # accumulate(day,fields[1:])
         #cropconv(storms,day)
