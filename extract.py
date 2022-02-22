@@ -14,10 +14,10 @@ import pandas as pd
 import subprocess as sp
 import time, calendar, gzip, tempfile, shutil, os
 import numpy as np
-import netCDF4
+import netCDF4, glob
 from os import walk
 import xarray as xr
-
+import util 
 # cases to extract from the year, from b0 to b1
 b0 = 120 
 b1 = 122
@@ -150,8 +150,9 @@ def get_storm_info(day):
     case_df = pd.DataFrame(columns={"timedate","Latitude","Longitude","Storm","Reflectivity"})
     i=+1
     delta = 0.15
-    # builds dataframe of case centers 
-    files = sorted(next(walk('{}'.format(LOCALMAX_PATH)), (None, None, []))[2]) # Grab files within localmax directory (csv)
+    # builds dataframe of case centers
+    files = sorted(glob.glob('{}/MergedReflectivityQCCompositeMaxFeature**.csv'.format(LOCALMAX_PATH),recursive=True)) 
+#    files = sorted(next(walk('{}'.format(LOCALMAX_PATH)), (None, None, []))[2]) # Grab files within localmax directory (csv)
     length=len(files)-1
     for idx, f in enumerate(files):
         timedate = f[-19:-4]
@@ -210,8 +211,35 @@ def get_storm_info(day):
                             print(row_idx)
                         case_df.loc[len(case_df.index)] = row
     case_df = case_df.sort_values(['timedate'])
-    case_df.to_csv('{}/{}/{}/storms.csv'.format(TRAINING_HOME, year, day))
+    case_df.to_csv('{}/{}/{}/csv/storms.csv'.format(TRAINING_HOME, year, day))
     return case_df
+
+def check_MESH(storms_df):
+    
+    if not os.path.isdir('{}/{}/{}/MESH_Max_30min'.format(OUT_HOME, year, date)):
+        os.system('w2accumulator -i {}/{}/{}/code_index.xml -g MESH -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, date,OUT_HOME,year,date))
+
+    for idx, row in case_df.iterrows():
+        
+        lon = row['Longitude']
+        lat = row['Latitude']
+        date1 = datetime.datetime.strptime(row['timedate'], "%Y%m%d-%H%M%S")
+        delta = 0.15
+
+        lonNW = lon - delta
+        latNW = lat + delta
+        lonSE = lon + delta
+        latSE = lat - delta
+        time1 = (date1 - datetime.timedelta(minutes=2, seconds=30)).strftime('%Y%m%d-%H%M%S')
+        time2 = (date1 + datetime.timedelta(minutes=2, seconds=30)).strftime('%Y%m%d-%H%M%S')         
+
+        # crop MESH
+        os.system("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2)) # make index for uncropped
+        os.system('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, OUT_HOME, year, date, latNW, lonNW, latSE, lonSE))
+        print('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, OUT_HOME, year, date, latNW, lonNW, latSE, lonSE))
+        # check for sufficient MESH pixels
+        
+
 
 def accumulate(day, fields):
     date = day
@@ -231,7 +259,7 @@ def cropconv(case_df, date):
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
     #os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
     
-    fields_ = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
+    products = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
  
     with open('trouble.txt',"a") as o:
         print(case_df,file=o)
@@ -252,11 +280,15 @@ def cropconv(case_df, date):
         date_1 = datetime.datetime.strptime(time1, "%Y%m%d-%H%M%S")
         time1 = (date_1-datetime.timedelta(minutes=2,seconds=30)).strftime('%Y%m%d-%H%M%S')
         time2 = (date_1+datetime.timedelta(minutes=2,seconds=20)).strftime('%Y%m%d-%H%M%S')
-
+        
+        # check if there is significant MESH 
+        # open netcdf
+        
+        
         # crop input
         #########################
         os.system("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2)) # make index for uncropped
-        for field in fields_:
+        for field in products:
             os.system('w2cropconv -i {}/{}/{}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,year,date, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE))
         with open('trouble.txt','a') as o:
             print('input {} {}'.format(time1,time2),file=o)
@@ -277,12 +309,12 @@ def cropconv(case_df, date):
         # crop for 30 min prior to 30 min ahead
         time1 = row['timedate']
         date_1 = datetime.datetime.strptime(time1, "%Y%m%d-%H%M%S")
-        time1 = (date_1+datetime.timedelta(minutes=-30,seconds=30)).strftime('%Y%m%d-%H%M%S')
-        time2 = (date_1+datetime.timedelta(minutes=30,seconds=30)).strftime('%Y%m%d-%H%M%S')
+        time1 = (date_1+datetime.timedelta(minutes=-30,seconds=00)).strftime('%Y%m%d-%H%M%S')
+        time2 = (date_1+datetime.timedelta(minutes=30,seconds=00)).strftime('%Y%m%d-%H%M%S')
         os.system("makeIndex.pl {}/{}/{}/NSE code_index.xml {}0000 {}0000".format(OUT_HOME, year, date, time1[:11],time2[:11]))
         print("makeIndex.pl {}/{}/{}/NSE code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2))
-        for field in NSE_fields:
-            os.system('w2cropconv -i {}/{}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, field, myrorss_path,date, idx, latNW, lonNW,latSE,lonSE))
+        for f in NSE_fields:
+            os.system('w2cropconv -i {}/{}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, f, myrorss_path,date, idx, latNW, lonNW,latSE,lonSE))
         # commenting this out for repair
         # os.system('w2cropconv -i {}/{}/multi{}/code_index.xml -I  MergedReflectivityQC -o /mnt/data/michaelm/practicum/cases/{}/multi{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(DATA_HOME,#date, multi_n, date, multi_n, idx, latNW, lonNW,latSE,lonSE))
     return
@@ -309,28 +341,29 @@ def main():
     #b0 = sys.argv[1]
     #b1 = sys.argv[2]
     # extract first 10 cases of the year (b1 to b2)
-    fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
-   #b1 = 80
-   #b2 = 103
-    #b0=0
-    #b1=5
-    days = get_cases(year='2011')[b0:b1]
+#    days = util.get_cases(year='2011') # get training days
+    
     #finished_days = get_training_cases(year='2011')
     #ays = [x for x in days if x not in finished_days] # subtracts the finished days from days.
     #ays = np.random.choice(days, ,replace=False)
 
+    # date loop : https://stackoverflow.com/questions/993358/creating-a-range-of-dates-in-python
+    days = ['20110619','20110618','20110617','20110616','20110615','20110614','20110613','20110612','20110611','20110610','20110609']
     start = time.time() # start time
-   # days = ['20110326','20110520']
+    days = ['20110409','20110619']
     for day in days:
-        year = day[:4]
-        extract(day)
-        print('extracting NSE \n \n \n')
-        extract_NSE(day)
-        localmax(day)
-       # print('finished localmaxing')
-        storms = get_storm_info(day) # use mergedtable from localmax to store locations       
-        accumulate(day,fields[1:])
-        cropconv(storms,day)
+        #year = day[:4]
+        #extract(day)
+        #print('extracting NSE \n \n \n')
+        #extract_NSE(day)
+       # localmax(day)
+        print('finished localmaxing')
+        storms = get_storm_info(day) # use mergedtable from localmax to store locations     
+        check_MESH(storms)   
+       # storms = pd.read_csv('{}/{}/{}/csv/storms.csv'.format(TRAINING_HOME, day[:4], day))
+       # accumulate(day,fields[1:])
+        #cropconv(storms,day)
+        #util.check_missing(day)
     end = time.time() # end time
     with open('info.txt','a') as info:
         print('Elapsed time for 1 day:',end-start)
