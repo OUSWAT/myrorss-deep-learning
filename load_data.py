@@ -19,12 +19,14 @@ import numpy as np
 import pandas as pd
 from ast import literal_eval
 from netCDF4 import Dataset
+import glob, util
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
-multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
+multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
-products = multi_fields + NSE_fields
+targets = ['target_MESH_Max_30min']
+products = multi_fields + NSE_fields + targets
 
 # INPUT VARIABLES HERE
 # make this more elegant, to input from the shell. check e0xtract.py
@@ -42,6 +44,56 @@ def get_cases(year):
         if storm[:4] == year:
             cases.append(storm[:8])
     return cases
+
+# load the data using glob to find all netcdfs in the directory. 
+def load():
+    ins_full = []   
+    outs_full = []
+    days = ['20110618','20110619'] 
+    for day in days:
+        storm_path = '{}/{}/{}'.format(TRAINING_HOME,day[:4],day)
+
+def load_data(year);
+    # cycle through days
+    # for each day, cycle through storms
+    # for each storm, if no data is missing, add to ins and outs
+    ins_full = []
+    outs_full = []
+    days = ['20110409','20110619']
+    for day in days:
+        ins = []
+        outs = []
+        fields = [] # we fill this up to check that all fields are present
+        all_files = []
+        year = day[:4]
+        storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
+        for storm in storms:
+            storm_path = '{}/{}/{}/{}'.format(TRAINING_HOME,year,day,storm)
+            # get the target netcdf
+            files = glob('{}/target*/**/*.netcdf'.format())
+            f = files[0] # grab a file
+            target_time = str(f.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
+            target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")
+
+            # grab the multi swaths 
+            swath_files = glob.glob('{}/**/*.netcdf'.format(storm_path), recursive=True)
+            for fname in swath_files:
+                field = fname.split('/')[-3] # grab field
+                if field not in fields and field in multi_fields: # collect each field once
+                    # check that the time is different from the target (i.e. 30 min early)
+                    ftime = util.get_time_from_fname(fname)
+                    if ftime != target_time and fname not in all_files:
+                        all_files.append(fname)
+                        fields.append(field)
+            
+            # grab the NSE data
+            NSE_files = glob.glob('{}/NSE/**/*.netcdf'.format(storm_path), recursive=True)
+            for fname in NSE_files:
+                field = fname.split('/')[-3] # grab field
+                if fname not in files:
+                    all_files.append(fname)
+            print('path: {} and n_files = {}'.format(storm_path,len(all_files)))
+    return
 
 def load_while(year):
     '''
