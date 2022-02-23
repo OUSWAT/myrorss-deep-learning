@@ -19,11 +19,8 @@ import numpy as np
 import pandas as pd
 from ast import literal_eval
 from netCDF4 import Dataset
-<<<<<<< HEAD
 import glob, util
-=======
 import util
->>>>>>> 602bdd9480fe73ff195c742b206a2bcff3782c1b
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
@@ -57,47 +54,64 @@ def load():
     for day in days:
         storm_path = '{}/{}/{}'.format(TRAINING_HOME,day[:4],day)
 
-def load_data(year):
+def load_data(year='2011'):
     # cycle through days
     # for each day, cycle through storms
     # for each storm, if no data is missing, add to ins and outs
     ins_full = []
     outs_full = []
-    days = ['20110409','20110619']
+    days = ['20110409']
     for day in days:
-        ins = []
-        outs = []
-        fields = [] # we fill this up to check that all fields are present
-        all_files = []
         year = day[:4]
         storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
         for storm in storms:
-            storm_path = '{}/{}/{}/{}'.format(TRAINING_HOME,year,day,storm)
-            # get the target netcdf
-            files = glob('{}/target*/**/*.netcdf'.format())
-            f = files[0] # grab a file
-            target_time = str(f.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
-            target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")
+            ins = []
+            outs = []
+            files, target, f_times = get_storm_files(storm)
+            # now we load the data
+            for fname in files:
+                field = fname.split('/')[-3] # grab field
+                nc = Dataset(fname)
+                var = np.asarray(nc.variables[field][:,:])
+                ins.append(var)
+            # get outs
+            field = 'MESH_Max_30min'
+            nc = Dataset(target)
+            outs.append(np.asarray(nc.variables[field][:,:]))
+            ins_full.append(ins)
+            outs_full.append(outs)
+    return ins_full, outs_full 
 
-            # grab the multi swaths 
-            swath_files = glob.glob('{}/**/*.netcdf'.format(storm_path), recursive=True)
-            for fname in swath_files:
-                field = fname.split('/')[-3] # grab field
-                if field not in fields and field in multi_fields: # collect each field once
-                    # check that the time is different from the target (i.e. 30 min early)
-                    ftime = util.get_time_from_fname(fname)
-                    if ftime != target_time and fname not in all_files:
-                        all_files.append(fname)
-                        fields.append(field)
-            
-            # grab the NSE data
-            NSE_files = glob.glob('{}/NSE/**/*.netcdf'.format(storm_path), recursive=True)
-            for fname in NSE_files:
-                field = fname.split('/')[-3] # grab field
-                if fname not in files:
-                    all_files.append(fname)
-            print('path: {} and n_files = {}'.format(storm_path,len(all_files)))
-    return None
+def get_storm_files(storm):
+    # given a storm path, return the files as a list of strings
+    f_times = [] 
+    files = []
+    fields = []
+    target = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/00.25/*netcdf'.format(storm))
+    if target == []:
+        return [], [], [] # return empty if no target
+    target = target[0]
+    target_time = str(target.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
+    target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")
+    f_times.append(target_time)
+    swath_files = glob.glob('{}/**/**/*.netcdf'.format(storm))
+    for fname in swath_files:
+        print(fname)
+        files.append(fname)
+        field = fname.split('/')[-3] # grab field
+        if field not in fields and field in multi_fields: # collect each field once
+        # check that the time is different from the target (i.e. 30 min early)
+            ftime = util.get_time_from_fname(fname)
+            f_times.append(ftime)
+            if ftime != target_time and fname not in files:
+                fields.append(field)                     
+        # NSE data
+        NSE_files = glob.glob('{}/NSE/**/**/*.netcdf'.format(storm), recursive=True)
+        for fname in NSE_files:
+            field = fname.split('/')[-3] # grab field
+            if fname not in files:
+                files.append(fname)
+    return files, target, f_times
 
 def load_while(year):
     '''
@@ -238,17 +252,22 @@ def modify_ins(ins,indices):
         ins = ins[:,:,:,idx]*0
     return ins
 
-#def main():
-ins, outs = load_while(year=year) # load
-#print(ins,outs)
-#ins = np.asarray(ins)
-outs = np.asarray(outs)
-#ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+def main():
+    length, files = load_data()
+    print("this is the length:",length)
+    print("and these are the files",files)
+    #ins, outs = load_while(year=year) # load
+    #print(ins,outs)
+    #ins = np.asarray(ins)
+    #outs = np.asarray(outs)
+    #ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+    #outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 
-#np.save('datasets/ins_june_18_19.npy',ins)
-np.save('datasets/outs_20110409.npy',outs)
+    #np.save('datasets/ins_june_18_19.npy',ins)
+    #np.save('datasets/outs_20110409.npy',outs)
+        
 
-#if __name__ == '__main__':
-#    main()
+
+if __name__ == '__main__':
+    main()
 
