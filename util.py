@@ -18,6 +18,19 @@ DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
+def clear():
+    # clear screen
+    os.system('clear')
+
+def get_cases(year):
+    cases = []
+    path = '{}/{}'.format(TRAINING_HOME,year)
+    possible_storms = os.listdir(path)
+    for storm in possible_storms:
+        if storm[:4] == year:
+            cases.append(storm[:8])
+    return cases
+
 # make hist of maxes
 def max_hist(images, title='Max MESH'):
     maxes = []
@@ -85,58 +98,64 @@ def check_day(date='20110409'):
     df.to_csv('{}/missingness.csv'.format(storms_dir))# save
     return df
 
-def check_storm(storm_path):
+def check_storm(storm):
     # given a storm path, check if any of the files are missing
-    storm_path = storm_path
     # find all files in storm path
     files = []
     fields = []
-    files = glob.glob('{}/target*/**/*.netcdf'.format(storm_path),recursive = True)
-    if len(files) > 1:
-        print(sorted(files))
-        f = files[0] # grab the first file. Maybe sort and grab the latest
-    else:
-        try:
-            f = files[0]
-        except:
-            missing = True # target is missing 
-            fields = ['target_MESH_Max_30min'] # missing field = target
-            return missing, fields
-    target_time = str(f.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
-    target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")#
-    input_time = (target_time+datetime.timedelta(minutes=-30)).strftime('%Y%m%d-%H%M%S')
-#    print(target_time)
-    print("'\n\n\'")
-    for fname in glob.glob('{}/**/*.netcdf'.format(storm_path),recursive = True): # recursively returns all files at any depth ending in .netcdf
+    f_times = []
+    target = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/00.25/*netcdf'.format(storm))
+    if target == []:
+        return False # , [] # if no target, reject 
+    target = target[0]
+    target_time = str(target.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
+    target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")
+    f_times.append(target_time)
+    swath_files = glob.glob('{}/**/**/*.netcdf'.format(storm))
+    for fname in swath_files:
+        files.append(fname)
         field = fname.split('/')[-3] # grab field
-        if field in fields:
-            fields.append(field) # append all fields. (len = 51)
-        # get the input time 
-        if field in products and field != 'target_MESH_Max_30min' and field not in NSE_fields:
-            f_time = get_time_from_fname(fname)
-            if f_time != target_time and fname not in files: # check whether the input time = target time
-                files.append(fname)       # if it does, append it
-    # get NSE files
-    for fname in glob.glob('{}/NSE/**/*.netcdf'.format(storm_path),recursive=True):
-        f_time = get_time_from_fname(fname)
-        if fname not in files:
-            files.append(fname)
-        
-    if len(files) != len(features)-1: # subtract one because MergedReflectivtyQC is represented by the degrees
-        missing = True
-    else:
-        missing = False
-    return missing, fields
+        if field not in fields and field in multi_fields: # collect each field once
+        # check that the time is different from the target (i.e. 30 min early)
+            ftime = get_time_from_fname(fname)
+            f_times.append(ftime)
+            if ftime != target_time and fname not in files:
+                fields.append(field)
+        # NSE data
+        NSE_files = glob.glob('{}/NSE/**/**/*.netcdf'.format(storm), recursive=True)
+        for fname in NSE_files:
+            field = fname.split('/')[-3] # grab field
+            if fname not in files:
+                files.append(fname)
+    if len(files) != 50:
+        return True #, files
+    return False #, files
 
+def check_day_for_missing(day):
+    year = day[:4]
+    storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
+    missing_list = []
+    for storm in storms:
+        missing_list.append(check_storm(storm))
+    df = pd.DataFrame(missing_list)
+    if not os.path.isdir('{}/{}/{}/csv/'.format(TRAINING_HOME,year,day)):
+        os.system('mkdir {}/{}/{}/csv'.format(TRAINING_HOME,year,day))
+    df.to_csv('{}/{}/csv/missing_{}.csv'.format(TRAINING_HOME,year,day))
+    return df
+ 
 def get_time_from_fname(fname):
     # returns the time form the fnam
     ftime = str(fname.split('/')[-1]).split('.')[0]
     ret_time = datetime.datetime.strptime(ftime,"%Y%m%d-%H%M%S")
     return ret_time
 
-def get_storms(date):
-    storms_dir = '{}/{}/{}'.format(TRAINING_HOME,date[:4],date) # path to storm directory
-    storms = sorted(os.listdir(storms_dir)) # list of storms
+def get_storms(year):
+    storms = []
+    path = '{}/{}'.format(TRAINING_HOME,year)
+    possible_storms = os.listdir(path)
+    for storm in possible_storms:
+        if storm[:4] == year:
+            storms.append(storm[:8])
     return storms
 
 def load_npy(prefix='outs'):
@@ -157,7 +176,6 @@ def load_npy(prefix='outs'):
     data = np.concatenate(data, axis=0)
     return data
 
-
 def remove_missing(year='2011'):
     # simple function to remove storms that are missing
     days = get_days(year) # retrieve days in training_data
@@ -174,7 +192,17 @@ def remove_missing(year='2011'):
                 os.system('rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) # remove missing
                 print(' rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) 
 def main():
-    remove_missing()
-
+    days = get_cases('2011')
+    print('days',days)
+    old_df = []
+    for day in days:
+        print(day)
+        df = check_day_for_missing(day)  
+        if old_df == []:
+            old_df = df
+        else:
+            df = df.append(old_df, ignore_index=True)
+            old_df = df
+    df.to_csv('/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/missing.csv')
 if __name__ == "__main__":
     main()
