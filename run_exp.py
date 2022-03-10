@@ -8,20 +8,17 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from sklearn.model_selection import train_test_split
-import random, argparse
-import numpy as np
-# from tensorflow.python.ops.numpy_ops.np_math_ops import true_divide
+import random, argparse, time
 from u_net_loop import *
 from stats import *
 import pickle, datetime
 from sklearn.preprocessing import StandardScaler
-from stats import *
 import tensorflow.keras.backend as K    
 
 K.set_image_data_format('channels_last')
 
-supercomputer = False # See line 138 where paths are set
-swatml = True
+supercomputer = True # See line 138 where paths are set
+swatml = False 
 
 # set constants
 #print(len(tf.config.list_physical_device('GPU')))
@@ -83,9 +80,10 @@ def augment_args(args):
     return ji.set_attributes_by_index(args.exp_index, args)
 
 def transform(var):
-    print(var.shape)
-    n_channels=var.shape[3]
-    print(n_channels)
+    try:
+        n_channels=var.shape[3]
+    except:
+        n_channels=1
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
 
@@ -149,102 +147,91 @@ elif(supercomputer):
 
 #########################################
 # set args and train
-parser = create_parser()
-args = parser.parse_args()
 
-ins = np.load('{}/ins_days_0_to_5.npy'.format(DATA_HOME))
-outs = np.load('{}/outs_days_0_to_5.npy'.format(DATA_HOME))
-if ins.shape[1] != 60: # if channels not last
-    ins = np.reshape(ins, (ins.shape[0], 60,60, 43))
-    outs = np.reshape(outs, (outs.shape[0],60,60, 1))
+if __name__ == "__main__":
+    parser = create_parser() # load arguments
+    args = parser.parse_args()  
+    ID = 'shave'
+    ins = np.load('{}/ins_{}.npy'.format(DATA_HOME, ID)) # load in and outs
+    outs = np.load('{}/outs_{}.npy'.format(DATA_HOME, ID))
 
-indices = np.asarray(range(ins.shape[0]))
-ins_train, ins_test , outs_train, outs_test = train_test_split(ins, outs, test_size=0.25, random_state=3)
-ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = train_test_split(indices, indices, test_size=0.25, random_state=3)
-#ins_train, ins_val, outs_train, outs_val = train_test_split(ins_train, outs_train, test_size =0.2, random_state=2)
-#ins_train_indices, ins_val_indices, outs_train_indices, outs_val_indices = train_test_split(ins_train_indices, ins_train_indices, test_size =0.2, random_state=2)
-# scaling
-ins_train, scalers = transform(ins_train)
-# ins_val = transform_test(ins_val,scalers)
-ins_test, scalers = transform_test(ins_test,scalers)
-pickle.dump(scalers, open('scaler_0_to_5.pkl','wb'))
+    indices = np.asarray(range(ins.shape[0]))
+    ins_train, ins_test , outs_train, outs_test = train_test_split(ins, outs, test_size=0.25, random_state=3)
+    ins_train_indices, ins_test_indices , outs_train_indices, outs_test_indices = train_test_split(indices, indices, test_size=0.25, random_state=3)
+    
+    # tranform onto 0-1 scale
+    # returns the input nparray and the scaler used to transform it
+    ins_train, scalers = transform(ins_train)
+    ins_test, scalers = transform_test(ins_test,scalers)
+    pickle.dump(scalers, open('scaler_{}.pkl'.format(ID),'wb'))
 
-outs_train, scalers = transform(outs_train)
-# outs_val = transform_test(outs_val,scalers)
-outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
-outs_scaler = outs_test_scalers[0] # save the transformation scaler for the true test set
-# save scalers for transformation back to scale 
-pickle.dump(scalers, open('scaler_0_to_5.pkl'.format(args.exp_type),'wb'))
-#pickle.dump(scalers, open('scaler_raw_noShear.pkl','wb'))
-pickle.dump(outs_test_scalers, open('scaler_{}.pkl'.format(args.exp_type),'wb'))
+    outs_train, scalers = transform(outs_train)
+    outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
+    pickle.dump(scalers, open('scaler_{}.pkl'.format(ID),'wb'))
 
-import time
-start = time.time()
-if swatml:
-    with strategy.scope():
-        model = UNet(ins_train.shape[1:], nclasses=1)
-elif supercomputer:
-    model = UNet(ins_train.shape[1:], nclasses=1) # create model
-with open('model_0_to_5.txt','w') as f: # save model architecture
-    model.summary(print_fn=lambda x: f.write(x+'\n'))
-model.summary() # print model architecture
+    start = time.time()
+    if swatml:
+        with strategy.scope():
+            model = UNet(ins_train.shape[1:], nclasses=1)
+    elif supercomputer:
+        model = UNet(ins_train.shape[1:], nclasses=1) # create model
+    with open('model_{}.txt'.format(ID),'w') as f: # save model architecture
+        model.summary(print_fn=lambda x: f.write(x+'\n'))
+    model.summary() # print model architecture
 
-# experiment with smaller batch sizes, as large batches have smaller variance
-generator = training_set_generator_images(ins_train, outs_train, batch_size=args.batch_size,
+    # experiment with smaller batch sizes, as large batches have smaller variance
+    generator = training_set_generator_images(ins_train, outs_train, batch_size=args.batch_size,
                         input_name='input',
                         output_name='output')
-early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
+    early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
                                                     monitor='mean_squared_error',
                                                     restore_best_weights=True,
                                                     min_delta=0.0)
-# Fit the model
-history = model.fit(x=generator, 
+    # Fit the model
+    history = model.fit(x=generator, 
                     epochs=args.epochs, 
                     steps_per_epoch=44,
                     use_multiprocessing=False, 
 #                    validation_data=(ins_val, outs_val),
                     verbose=True, 
                     callbacks=[early_stopping_cb])
-if twice == True:
-    model.compile(loss=my_MSE_fewer_misses, metrics='mse')
-    history = model.fit(ins_train, outs_train,epochs=10, batch_size=370)
+    if twice == True:
+        model.compile(loss=my_MSE_fewer_misses, metrics='mse')
+        history = model.fit(ins_train, outs_train,epochs=10, batch_size=370)
 
-results = {}
-#results['args'] = args
-results['true_outs'] = outs
-results['predict_training'] = model.predict(ins_train)
-results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
-results['true_training'] = outs_train
-#results['predict_validation'] = model.predict(ins_val)
-#results['predict_validation_eval'] = model.evaluate(ins_val, outs_val)
-#results['true_validation'] = outs_val
-results['true_testing'] = outs_test
-results['predict_testing'] = model.predict(ins_test)
-results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
-results['outs_test_indices'] = outs_test_indices
-#results['folds'] = folds
-results['history'] = history.history
+    results = {}
+    #results['args'] = args
+    results['true_outs'] = outs
+    results['predict_training'] = model.predict(ins_train)
+    results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
+    results['true_training'] = outs_train
+    results['true_testing'] = outs_test
+    results['predict_testing'] = model.predict(ins_test)
+    results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
+    results['outs_test_indices'] = outs_test_indices
+    results['history'] = history.history
 
-# Save statistical results in a database
-stats, area = binary_accuracy(model, ins_test, outs_test, outs_scaler)
-correct, total, TP, FP, TN, FN, events = stats
-far = FP/(FP+TN)
-pod = TP/(TP+FN)
-csi = (TP+TN)/(TP+TN+FP+FN)
-hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 # Save results
-dataset='shave'
-exp_type='single-test_MSE'
-fbase = r"results/{}_{}".format(exp_type,dataset)
-results['fname_base'] = fbase
-fp = open("%s_results.pkl"%(fbase), "wb")
-pickle.dump(results, fp)
-fp.close()
+    dataset=''
+    exp_type=''
+    fbase = r"results/{}".format(ID)
+    results['fname_base'] = fbase
+    fp = open("%s_results.pkl"%(fbase), "wb")
+    pickle.dump(results, fp)
+    fp.close()
 
-# Model
-model.save("%s_model"%(fbase))
-end=time.time()
-print(fbase)
-print(end-start)
+    # Save statistical results in a database
+    #stats, area = binary_accuracy(results['true_testing'],results['predict_testing'],outs_scaler)
+    #correct, total, TP, FP, TN, FN, events = stats
+    #far = FP/(FP+TN)
+    #pod = TP/(TP+FN)
+    #csi = (TP+TN)/(TP+TN+FP+FN)
+    #hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
+    #row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+    # Model
+    model.save("%s_model"%(fbase))
+    end=time.time()
+    print(fbase)
+    print("Time to run experiment (s):",end-start)
