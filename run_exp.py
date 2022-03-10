@@ -17,8 +17,8 @@ import tensorflow.keras.backend as K
 
 K.set_image_data_format('channels_last')
 
-supercomputer = True # See line 138 where paths are set
-swatml = False 
+supercomputer = False # See line 138 where paths are set
+swatml = True
 
 # set constants
 #print(len(tf.config.list_physical_device('GPU')))
