@@ -39,7 +39,7 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
     tensor = BatchNormalization()(input_tensor)     # prevents overfitting by normalizing for each batch, i.e. for each batch of samples
     tensor = GaussianNoise(0.1)(tensor) 
     
-    filters = [16,32,64]
+    filters = [16,32]
     
     # downsampling loop
     for idx, f in enumerate(filters[:-1]):
