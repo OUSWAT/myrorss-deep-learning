@@ -17,8 +17,8 @@ import tensorflow.keras.backend as K
 
 K.set_image_data_format('channels_last')
 
-supercomputer = False # See line 138 where paths are set
-swatml = True
+supercomputer = True # See line 138 where paths are set
+swatml = False
 
 # set constants
 #print(len(tf.config.list_physical_device('GPU')))
@@ -37,7 +37,7 @@ def create_parser():
     parser.add_argument('-network',type=str,default='unet',help='Enter u-net.')
     parser.add_argument('-unet_type', type=str, default='add', help='Enter whether to concatenate or add during skips in unet')
     parser.add_argument('-filters',type=int, default=[12,12], help='Enter the number of filters for convolutional network')
-    parser.add_argument('-batch_size',type=int, default=1, help='Enter the batch size.')
+    parser.add_argument('-batch_size',type=int, default=50, help='Enter the batch size.')
     parser.add_argument('-activation',type=str, default='relu', help='Enter the activation function.')
     parser.add_argument('-optimizer',type=str, default='adam', help='Enter the optimizer.')
     parser.add_argument('-exp_index', nargs='+', type=int, help='Array of integers')
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     # Fit the model
     history = model.fit(x=generator, 
                     epochs=args.epochs, 
-                    steps_per_epoch=44,
+                    steps_per_epoch=20,
                     use_multiprocessing=False, 
 #                    validation_data=(ins_val, outs_val),
                     verbose=True, 
