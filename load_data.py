@@ -24,10 +24,13 @@ home = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min']
+swath_fields = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MergedReflectivityQCComposite_Max_30min','MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
+degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
+
 targets = ['target_MESH_Max_30min']
 products = multi_fields + NSE_fields + targets
-
+field_list = NSE_fields + swath_fields
 # INPUT VARIABLES HERE
 # make this more elegant, to input from the shell. check e0xtract.py
 #year=str(sys.argv[1])
@@ -45,141 +48,85 @@ def get_cases(year):
             cases.append(storm[:8])
     return cases
 
+def info(df,i):
+    # returns storm path for an index i in dataframe df
+    for idx, row in df.iterrows():
+        if idx == i:
+            return row['storm_path'], row['features']
+       
 def load_data_from_df(df):
     ins_full = []
+    outs_full = []
     for idx, row in df.iterrows():
+        if idx == 20:
+            break
         n = int(row['features'])
+        print(n)
         storm = row['storm_path']
         if n < 45:
             continue # skip
         ins = []
-        files = get_storm_files(storm)
-        # get the ins
-        target = files[0] # target is first file by default
-        target_time = target.split('/')[-1]
-        fields = []
-        for f in files[1:]:
-            f_field = f.split('/')[-3]
-            f_time = f.split('/')[-1]
-            if f_field not in fields and f_time != target_time:
-                fields.append(f_field)
-                nc = Dataset(f)
-                var = nc.variables[field][:,:]
-                var = np.where(var<-40,0,var)
-                ins.append(var)
-        nc = Dataset(target)
-        var = nc.variables['MESH_Max_30min'][:,:]
-        var = np.where(var<-40,0,var)
-        outs_full.append(var)
-        ins_full.append(ins)
-    return ins, outs
-
-
-def load_data(year='2011',shape=45):
-    # cycle through days
-    # for each day, cycle through storms
-    # for each storm, if no data is missing, add to ins and outs
-    ins_full = []
-    outs_full = []
-    shape_list = []
-  #  days = ['20110409']
-    days = get_cases('2011') 
-    print(days)
-    df = pd.DataFrame(columns={'storm_path','features'})
-    for idx, day in enumerate(days):
-        year = day[:4]
-        storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
-        for storm in storms:
-            ins = []
-            outs = []
-            files, target, f_times = get_storm_files(storm)
-            if target == [] or len(files) < 0:
-                continue
-            ## now we load the data
-            for fname in files:
-                field = fname.split('/')[-3] # grab field
-                nc = Dataset(fname)
-                var = np.asarray(nc.variables[field][:,:])
-                ins.append(var)
-            # get outs
-
-            field = 'MESH_Max_30min'
-            nc = Dataset(target)
-            outs.append(np.asarray(nc.variables[field][:,:]))
-            outs = np.asarray(outs)
-            ins = np.asarray(ins) 
-            
-            shape_list.append(ins.shape[0])
-            storm_list.append(storm)
-            row = {'storm_path':storm,'features':ins.shape[0]}
-            df.loc[idx] = row
+        nc_files = []
+        missing_fields = []
+        #outs = []
+        # grab reflcectivity first        
+        field = 'MergedReflectivityQC'
+        for deg in degrees:
+            nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg))
+            if nc_files == []:
+                missing_fields.append(deg)
+            else:
+                nc_files.append(nc_file[0])
+            # check for multiple files or 
+        for field in field_list:
+            missing_fields = []
+            nc_file = glob.glob('{}/{}/**/*netcdf'.format(storm,field))
+            if nc_file == []:
+                nc_file = glob.glob('{}/NSE/{}/**/*netcdf'.format(storm,field))
+                if nc_file == []: 
+                    missing_fields.append(field)
+                    continue
+                else:
+                    nc_files.append(nc_file[0])
+            nc_files.append(nc_file[0])
+        print(missing_fields)
+        return nc_files
+        #print('nc_files',nc_files)
+        if missing_fields != []:
             break
-            print('shape: {} \n {}'.format(ins.shape[0],storm))
-            if ins.shape[0] >= 30 and outs.shape[0] == 1:
-                ins_full.append(ins[:30,:,:])
-                outs_full.append(outs)
-    df.to_csv('{}/csv/{}_missing.csv'.format(home,year))
-    return df
-   # return np.asarray(ins_full), np.asarray(outs_full) 
+        for f in nc_files:
+            nc = Dataset(f)
+            var = nc.variables[f.split('/')[-3]][:,:]
+            var = np.where(var<-20,0,var)
+            ins.append(var)
+        ins_full.append(ins)
+    return np.asarray(ins_full)
 
-def get_df_shapes(year='2011',prefix='2011'):
+def get_df_shapes(year='2011'):
     # check shape of ins for each storm_path
     # return df of shape and path
     shape_list = []
     i=0
-    days = get_cases('2011')
-    df = pd.DataFrame(columns={'storm_path','features'})
+    days = get_cases(year)
+    df = pd.DataFrame(columns={'storm_path','features','feature_list'})
     for idx, day in enumerate(days):
         year = day[:4]
+        fields = []
         storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
         for storm in storms:
             ins = []
             files = get_storm_files(storm)
             if files == []:
-                row = {'storm_path':storm, 'features':0}
+                row = {'storm_path':storm, 'features':0, 'feature_list':[]}
                 df.loc[i] = row
                 i+=1
                 continue
-            ## now we load the data
-           # for fname in files:
-           #     field = fname.split('/')[-3] # grab field
-           #     nc = Dataset(fname)
-           #     var = np.asarray(nc.variables[field][:,:])
-           #     ins.append(var)
-           # ins = np.asarray(ins)
-            row = {'storm_path':storm,'features':len(files)}
+            for f_name in files:
+                fields.append(f_name.split('/')[3])
+            row = {'storm_path':storm,'features':len(files),'feature_list':files,'fields':fields}
             df.loc[i] = row
             i+=1
-    df.to_csv('{}/csv/{}_missing.csv'.format(home,year))
-    return df
-
-def get_df_shape_2(year='2011'):
-    # check shape of ins for each storm_path
-    # return df of shape and path
-    shape_list = []
-    days = sorted(get_cases('2011'),reverse=False)
-    tmparr = []
-    for day in days:
-        if day[:4] == '2011':
-            tmparr.append(day)
-    days = tmparr
-    i = 0 # index for building df
-    df = pd.DataFrame(columns={'storm_path','features'})
-    for idx, day in enumerate(days):
-        year = day[:4]
-        storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
-        for storm in storms:
-            ins = []
-            files, target, f_times = get_storm_files(storm)
-            if target == [] or len(files) < 0:
-                row = {'storm_path':storm, 'features':0}
-                df.loc[idx] = row
-                continue
-            ## now we load the data
-            row = {'storm_path':storm,'features':len(files)}
-            df.loc[i] = row
-            i+=1
-    df.to_csv('{}/csv/{}_missing.csv'.format(home,year))
+    df.to_csv('{}/csv/{}_missing_fields.csv'.format(home,year))
     return df
 
 def get_storm_files(storm):
@@ -241,15 +188,32 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
-    ins, outs = load_data(year='2011') # load
-    #print(ins,outs)
+    year = '2011'
+    df = get_df_shapes(year='2011')
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    year = '2010'
+    df = get_df_shapes(year='2010')
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    #possible_df = pd.read_csv('csv/{}_missing.csv'.format(year))
+   
+    #df = possible_df[possible_df['features'] >= 45]
+   # if possible_df != []:
+   #     try:
+   #         df = pd.read_csv('csv/2011_missing.csv')
+   # 
+   #     except:
+   #         df = get_df_shapes()
+   # else:
+   #     df = pd.read(possible_df[0])
+    df = pd.read_csv('csv/2010_missing.csv')
+    ins, outs = load_data_from_df(df)
     ins = np.asarray(ins)
     outs = np.asarray(outs)
-    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+  #  ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+  #  outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 
-    np.save('datasets/ins_2011.npy',ins)
-    np.save('datasets/outs_2011.npy',outs)
+    np.save('datasets/ins_2010.npy',ins)
+    np.save('datasets/outs_2010.npy',outs)
         
 
 
