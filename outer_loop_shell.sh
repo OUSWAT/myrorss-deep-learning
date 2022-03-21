@@ -1,10 +1,10 @@
 #!/usr/bin/bash
-#SBATCH -p swat
-#SBATCH -t 03:00:00
-#SBATCH --error=outer_nse_err_%J.out 
-
-STARTDATE=20090425
-ENDDATE=20090426
+#SBATCH -p swat_plus 
+#SBATCH -t  08:00:00
+#SBATCH --error=accumloop_error_%J.out 
+#SBATCH --job-name=outerloopcronv
+STARTDATE=20110326
+ENDDATE=20110327
 
 DATE=( $(seq $STARTDATE 1 $ENDDATE) )
 echo ${DATE[@]}

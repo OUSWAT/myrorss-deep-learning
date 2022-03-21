@@ -10,6 +10,7 @@
 #############################################
 
 import os, sys, datetime, random
+from os import environ 
 import pandas as pd
 import subprocess as sp
 import time, calendar, gzip, tempfile, shutil, os
@@ -19,33 +20,25 @@ from os import walk
 import xarray as xr
 import util 
 from netCDF4 import Dataset
-import subprocess as sp 
+
+lscratch = os.environ.get('LSCRATCH')
 
 # cases to extract from the year, from b0 to b1
 b0 = 120 
 b1 = 122
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
-OUT_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data/uncropped'
+OUT_HOME = '{}/uncropped'.format(lscratch)
 CONV_HOME = OUT_HOME # may play with names in future
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 NSE_HOME = '/condo/swatcommon/NSE'
 fields_accum = ['MESH']
-
 
 lon_NW, lat_NW, lon_SE, lat_SE = -130.005, 55.005, -59.995, 19.995 # see MYRORSS readme at https://osf.io/kbyf7/
 fields = ['MergedReflectivityQC','MergedReflectivityQCComposite','MESH','MergedLLShear','MergedMLShear','Reflectivity_0C', 'Reflectivity_-10C','Reflectivity_-20C']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
 min_accum_fields = ['MergedReflectivityQCComposite','MESH','MergedLLShear','MergedMLShear']
 fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
-#fields = ['MergedReflectivityQC']
-####################################
-# Troubleshooting file
-trouble = "trouble.txt"
-with open(trouble,"w") as f:
-    pass
-#os.system('makeIndex.pl /condo/swatwork/mcmontalbano/MYRORSS/data/uncropped/1999/19990103 code_index.xml')
-#sys.exit()
 
 ####################################
 # Functions 
@@ -69,23 +62,22 @@ def extract(day):
     see: https://www.geeksforgeeks.org/create-an-empty-file-using-python/
     '''
     year = day[:4]
-    os.system('mkdir {}/{}/{}'.format(OUT_HOME,year,day))
+    os.system('mkdir {}'.format(OUT_HOME))
     # iterate over fields   
  
     for field in fields:
-        time.sleep(5)
         if field == 'MergedLLShear' or field == 'MergedMLShear':
             #ry:
             #   os.system('tar -xvf {}/{}/Azshear/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
             #xcept:
-            cmd = 'tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field)
+            cmd = 'tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,field)
             p = sp.Popen(cmd, shell=True)
             p.wait()
         else:
-            cmd = 'tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field)
+            cmd = 'tar -xvf {}/{}/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,field)
             p = sp.Popen(cmd, shell=True)
             p.wait()
-        field_path = '{}/{}/{}/{}'.format(OUT_HOME,year,day,field) # pointing to the field in the uncropped directory
+        field_path = '{}/{}'.format(OUT_HOME,field) # pointing to the field in the uncropped directory
         subdirs = os.listdir(field_path)                           # list the directories within the field
         for subdir in subdirs:                                     # usually a dummy directory like '00.00' or '00.25'
             files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
@@ -105,23 +97,22 @@ def extract(day):
                     pass    
     return None  
                # except:
-                   #     print('fields, first loop exception: {}/{}/{}'.format(field_path, subdir, f[:15]))
+                   #i print('fields, first loop exception: {}/{}/{}'.format(field_path, subdir, f[:15]))
                             
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
     #        os.system('rm {}/{}/{}/{}/{}/*.gz'.format(OUT_HOME,year,day,field,subdir))        
 
-def extract_NSE(day):
+def extract_nse(day):
     year=day[:4]
-    nse_path = '{}/{}/{}/NSE'.format(OUT_HOME,year,day)
+    nse_path = '{}/NSE'.format(OUT_HOME)
     cmd = 'mkdir {}'.format(nse_path)
     p = sp.Popen(cmd, shell=True)
     p.wait()
     for field in NSE_fields:
-        time.sleep(4)
         cmd = 'mkdir {}/{}'.format(nse_path,field)
         p = sp.Popen(cmd, shell=True)
         p.wait()
-        field_path = '{}/{}/{}/NSE/{}/nseanalysis/'.format(NSE_HOME, year, day, field) # i.e. /condo/swatcommon/NSE/1999/19990101/NSE/SRHelicity0-2km/nseanalysis
+        field_path = '{}/{}/nseanalysis/'.format(nse_path, field) # i.e. $LSCRATCH/NSE/SRHelicity0-2km/nseanalysis
         files = next(walk(field_path), (None, None, []))[2] # list files in the directory
         for f in files:
             try:
@@ -133,12 +124,12 @@ def extract_NSE(day):
                 tmp.close()
                 data = netCDF4.Dataset(tmp.name)
                 dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
-                os.system('mkdir {}/{}/{}/NSE/{}'.format(OUT_HOME, year, day, field))
-                dataset.to_netcdf(path='{}/{}/{}/NSE/{}/{}.netcdf'.format(OUT_HOME, year, day, field, f[:15]))
+                dataset.to_netcdf(path='{}/NSE/{}/{}.netcdf'.format(OUT_HOME, field, f[:15]))
             except:
                 pass
         # REMOVE THE TARS and GZs FROM SCRATCH ONLY
     return None 
+
 def localmax(day):
     '''
     Given a day in YYYYMMDD, run w2localmax
@@ -149,7 +140,7 @@ def localmax(day):
     '''
     year = day[:4]
     myrorss_path = '{}/{}'.format(TRAINING_HOME,year)
-    out_path = '{}/{}/{}'.format(OUT_HOME,year,day)
+    out_path = '{}/{}/{}'.format(OUT_HOME)
     cmd1 = 'makeIndex.pl {} code_index.xml'.format(out_path)
     cmd2 = 'w2localmax -i {}/code_index.xml -I MergedReflectivityQCComposite -o /{}/{} -s -d "40 60 5"'.format(out_path,myrorss_path,day)
     cmd3 = 'makeIndex.pl {}/{} code_index.xml'.format(myrorss_path,day)
@@ -162,9 +153,7 @@ def localmax(day):
     p.wait()
     p = sp.Popen(cmd4, shell=True)
     p.wait()
-    time.sleep(5)
     return None
-
 
 def get_storm_info(day):
     year = day[:4] 
@@ -240,11 +229,11 @@ def get_storm_info(day):
 def check_MESH(storms_df, day):
     # Check whether the input MESH swath is above a threshold to ensure that hailstorms are chosen, not fledgeling storms 
     year = day[:4] # whatever
-    if not os.path.isdir('{}/{}/{}/MESH_Max_30min'.format(OUT_HOME, year, day)):
-        cmd = 'w2accumulator -i {}/{}/{}/code_index.xml -g MESH -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, day,OUT_HOME,year,day)
+    if not os.path.isdir('{}/MESH_Max_30min'.format(OUT_HOME, year, day)):
+        cmd = 'w2accumulator -i {}/code_index.xml -g MESH -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,OUT_HOME)
         p = sp.Popen(cmd, shell=True)
         p.wait()    
-    MESH_dir = '{}/{}/{}/test_MESH/MESH_Max_30min/00.25'.format(OUT_HOME, year, day)
+    MESH_dir = '{}/{}/{}/test_MESH/MESH_Max_30min/00.25'.format(OUT_HOME)
     if os.path.isdir('{}'.format(MESH_dir)):
         cmd = 'rm {}/*'.format(MESH_dir)
         p = sp.Popen(cmd, shell=True)
@@ -268,8 +257,8 @@ def check_MESH(storms_df, day):
             continue # skip
         # crop MESH
         cmd_list = []
-        cmd_list.append("makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, day, time1, time2))
-        cmd_list.append('w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min -o {}/{}/{}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n'.format(OUT_HOME, year, day, OUT_HOME, year, day, latNW, lonNW, latSE, lonSE))
+        cmd_list.append("makeIndex.pl {} code_index.xml {} {}".format(OUT_HOME, time1, time2))
+        cmd_list.append('w2cropconv -i {}/code_index.xml -I MESH_Max_30min -o {}/test_MESH -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n'.format(OUT_HOME, OUT_HOME, latNW, lonNW, latSE, lonSE))
         for cmd in cmd_list:
             p = sp.Popen(cmd, shell=True)
             p.wait()
@@ -304,10 +293,9 @@ def decide(image):
     MESH_pixels = 0 
     for row in image:
         for pixel in row:
-            if pixel > 15: 
+            if pixel > 20: 
                 MESH_pixels+=1
-
-    if MESH_pixels > 10:
+    if MESH_pixels > 25:
         return True
     else:
         return False
@@ -315,7 +303,7 @@ def decide(image):
 def accumulate(day, fields):
     date = day
     year = date[:4]
-    cmd = 'makeIndex.pl {}/{}/{} code_index.xml'.format(OUT_HOME,year,date)
+    cmd = 'makeIndex.pl {} code_index.xml'.format(OUT_HOME)
     #if os.path.exists('{}/{}/{}/{}'.format(OUT_HOME,year,date,fields[0])):
     p = sp.Popen(cmd,shell=True)   
     stdout, stderr = p.communicate()
@@ -324,16 +312,16 @@ def accumulate(day, fields):
     #for line in stdout:
     #    print(line.decode(),end='')     
     for field in fields:
-        folders = glob.glob('{}/{}/{}/{}_*30min'.format(OUT_HOME,year,day,field))
+        folders = glob.glob('{}/{}_*30min'.format(OUT_HOME,field))
         if field in folders:
             continue
-        cmd = 'w2accumulator -i {}/{}/{}/code_index.xml -g {} -o {}/{}/{} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME,year, date, field,OUT_HOME,year,date)
+        cmd = 'w2accumulator -i {}/code_index.xml -g {} -o {} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME, field,OUT_HOME)
         p = sp.Popen(cmd,shell=True)
         stdout, stderr = p.communicate()
         print(cmd)
         findMin = False # I don't care about the min shear, for now
         if field[8:] == 'Shear' and findMin == True: # so skip this loop
-            cmd = 'w2accumulator -i {}/{}/{}/code_index.xml -g {} -o {}/{}/{} -C 3 -t 30 --verbose="severe"'.format(OUT_HOME,year, date, field, OUT_HOME,year, date)
+            cmd = 'w2accumulator -i {}/code_index.xml -g {} -o {} -C 3 -t 30 --verbose="severe"'.format(OUT_HOME, field, OUT_HOME)
             p = sp.Popen(cmd,shell=True)
             stdout, stderr = p.communicate()
     #        if type(stdout) == None:
@@ -349,20 +337,14 @@ def cropconv(case_df, date):
 
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
     #os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
-    cmd = 'makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date)
+    cmd = 'makeIndex.pl {}/NSE code_index.xml'.format(OUT_PATH)
     p = sp.Popen(cmd,shell=True)
     p.wait()
     products = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
     #products = ['MergedReflectivityQC']
-    with open('trouble.txt',"a") as o:
-        print(case_df,file=o)
     for idx, row in case_df.iterrows():
-        print('Is this a hailstorm?',row['is_Storm'])
-        print('the row goes:',row)
         if row['is_Storm'] == False:
             continue # skip 
-        # if idx <= 200:
-        #     continue
         lon = row['Longitude']
         lat = row['Latitude']
         delta = 0.15
@@ -375,31 +357,26 @@ def cropconv(case_df, date):
         time1 = (date_1-datetime.timedelta(minutes=3,seconds=30)).strftime('%Y%m%d-%H%M%S')
         time2 = (date_1+datetime.timedelta(minutes=3,seconds=30)).strftime('%Y%m%d-%H%M%S')
         # crop input
-        cmd = "makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME, year, date, time1, time2)
+        cmd = "makeIndex.pl {} code_index.xml {} {}".format(OUT_HOME, time1, time2)
         p = sp.Popen(cmd,shell=True)
         p.wait()
         for field in products:
             if os.path.isdir('{}/{}/storm{:04d}/{}'.format(myrorss_path, date,idx,field)):
                continue 
-            cmd = 'w2cropconv -i {}/{}/{}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,year,date, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
+            cmd = 'w2cropconv -i {}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
             p = sp.Popen(cmd,shell=True)
             p.wait()
-        with open('trouble.txt','a') as o:
-            print('input {} {}'.format(time1,time2),file=o)
 
         # crop target -
         time1 = (date_1+datetime.timedelta(minutes=27,seconds=30)).strftime('%Y%m%d-%H%M%S')
         date_1 = datetime.datetime.strptime(time1, "%Y%m%d-%H%M%S")
         time2 = (date_1+datetime.timedelta(minutes=5,seconds=30)).strftime('%Y%m%d-%H%M%S')     
-        with open('trouble.txt','a') as o:
-            print('target {} {}'.format(time1,time2),file=o)   
         
-        cmd1 = "makeIndex.pl {}/{}/{} code_index.xml {} {}".format(OUT_HOME,year,date, time1, time2)
-        cmd2 = 'w2cropconv -i {}/{}/{}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME,year,date, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
-        cmd3 = "makeIndex.pl {}/{}/{}/NSE code_index.xml {}0000 {}0000".format(OUT_HOME, year, date, time1[:11],time2[:11])
+        cmd1 = "makeIndex.pl {} code_index.xml {} {}".format(OUT_HOME, time1, time2)
+        cmd2 = 'w2cropconv -i {}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
+        cmd3 = "makeIndex.pl {}/NSE code_index.xml {}0000 {}0000".format(OUT_HOME, time1[:11],time2[:11])
         
         p = sp.Popen(cmd1,shell=True)
-
         p.wait()
         p = sp.Popen(cmd2,shell=True)
         p.wait()
@@ -415,17 +392,10 @@ def cropconv(case_df, date):
         for f in NSE_fields:
             if os.path.isdir('{}/{}/storm{:04d}/NSE/{}'.format(myrorss_path,date,idx,f)):
                 continue
-            cmd = 'w2cropconv -i {}/{}/{}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, year, date, f, myrorss_path,date, idx, latNW, lonNW,latSE,lonSE)
+            cmd = 'w2cropconv -i {}/NSE/code_index.xml -I {} -o {}/{}/storm{:04d}/NSE -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, f, myrorss_path,date, idx, latNW, lonNW,latSE,lonSE)
             p = sp.Popen(cmd,shell=True)
             p.wait()
-    return None
-
-
-def get_NSE(date,fields):
-    year = date[:4]
-    for field in fields:
-        os.system('mkdir {}/{}/{}/NSE'.format(OUT_HOME,year,date))
-        os.sytem('ln -s {}/{}/{}/NSE/{} /{}/{}/{}/NSE'.format(NSE_HOME,year,date,field,OUT_HOME,year,date))
+    return 'happy meal'
 
 def get_training_cases(year = '1999'):
     # grabs cases from the traininghome
@@ -445,51 +415,15 @@ def main():
 
     year = day[:4]
     day_path = '{}/{}/{}'.format(TRAINING_HOME,year,day)  
-    if not os.path.isdir('{}/{}/{}/{}'.format(OUT_HOME,year,day,fields[-1])):
-        extract(day) 
-   # if not os.path.isdir('{}/{}/{}/{}'.format(OUT_HOME,year,day,NSE_fields[-1])):
-    time.sleep(4)
-    if not os.path.isdir('{}/{}/{}/{}'.format(OUT_HOME,year,day,NSE_fields[-1])):
-        extract_NSE(day)
+    #if not os.path.isdir('{}/{}/{}/{}'.format(OUT_HOME,year,day,fields[-1])):
     
-    # Loop to deciding whether to localmax (true) or not (false) - verified works to generate storms.csv in /csv folder of /data/2011/etc 
-    run = True # initially, we expect to run it
-    if os.path.isdir('{}/csv'.format(day_path)):
-        try:
-            storms = pd.read_csv('{}/csv/storms.csv'.format(day_path))
-            if len(storms) > 0:
-                run = False # set run to False, signaling that localmax has already been run 
-            else: # if len == 0, run localmax to fill csv
-                run = True
-        except: # storms csv not here - run localmax to make csv 
-            run = True
-    else: # if there's no csv, run localmax() to create the csv
-        run = True        
-    if run == True:
-        localmax(day)
-        storms = get_storm_info(day)
-    elif run == False:
-        storms = pd.read_csv('{}/csv/storms.csv'.format(day_path))  
-       
-    p = sp.Popen('ls',shell=True)
-    p.wait()
-    #localmax(day)
-    time.sleep(10)
-    storms = pd.read_csv('{}/csv/storms.csv'.format(day_path))
-    #storms = check_MESH(storms,day)
-    p = sp.Popen('ls',shell=True)
-    p.wait()
-    time.sleep(5)
-    #storms_df = pd.read_csv('{}/csv/storms.csv'.format(day_path)) # read in after checking  
-    #accumulate(day,min_accum_fields) # accumulate the correct storms
-    time.sleep(10)
-    cropconv(storms,day) # crop those storms
-    print('-----------------------')      
-    #util.check_missing(day)
-    
-    end = time.time() # end time
-    with open('info.txt','a') as info:
-        print('Elapsed time for 1 day:',end-start)
-    print(end-start)
+    extract(day) 
+    extract_nse(day)
+    localmax(day)
+    storms = get_storm_info(day)
+    samples = check_MESH(storms)
+    accumulate(day,accum_fields) # accumulate the correct storms
+    dummy = cropconv(samples)
+
 if __name__ == "__main__":
     main()
