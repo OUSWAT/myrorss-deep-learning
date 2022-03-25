@@ -20,6 +20,7 @@ from os import walk
 import xarray as xr
 import util 
 from netCDF4 import Dataset
+from datetime.datetime import strftime
 
 lscratch = os.environ.get('LSCRATCH')
 
@@ -40,6 +41,8 @@ NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorM
 min_accum_fields = ['MergedReflectivityQCComposite','MESH','MergedLLShear','MergedMLShear']
 fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min']
 accum_fields = fields_accum
+all_fields = fields+NSE_fields
+
 ####################################
 # Functions 
 
@@ -81,10 +84,6 @@ def extract(day,OUTPATH,check=True):
             p = sp.Popen(cmd, shell=True)
             p.wait()
         field_path = '{}/{}'.format(OUT_HOME,field) # pointing to the field in the uncropped directory
-       # os.chdir('{}'.format(OUT_HOME))
-      #  cmd = 'ls'
-      #  p = sp.Popen(cmd, shell=True)
-      #  p.wait()
         subdirs = os.listdir(field_path)                           # list the directories within the field
         for subdir in subdirs:                                     # usually a dummy directory like '00.00' or '00.25'
             files = next(walk('{}/{}'.format(field_path,subdir)), (None, None, []))[2] # only grab files
@@ -95,11 +94,6 @@ def extract(day,OUTPATH,check=True):
                     print('trying')
                     filename = '{}/{}/{}'.format(field_path, subdir, f)
                     print('filename',filename)
-                    #infile = gzip.open(filename,'rb')
-                    #tmp = tempfile.NamedTemporaryFile(delete=False)
-                    #shutil.copyfileobj(infile, tmp)
-                    #infile.close()
-                    #tmp.close()
                     if filename[:-2] != 'gz':
                         pass
                     gz = gzip.open(filename)
@@ -107,13 +101,100 @@ def extract(day,OUTPATH,check=True):
                     dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
                     print('assigning')
                     dataset.to_netcdf('{}/{}/{}.netcdf'.format(lscratch,field,f[:15]))
-                #    dataset.to_netcdf(path='/condo/swatwork/mcmontalbano/MYRORSS/data/2011/20110326/{}.netcdf'.format(f[:15]))
-                    #dataset.to_netcdf(path='{}/{}/{}.netcdf'.format(field_path, subdir, f[:15]))
-               # except:
-               #     print('passing')
-               #     pass
-    #        os.system('rm {}/{}/*gz'.format(field_path, subdir))    
     return None  
+
+def untar(day,field):
+    # untars day for field
+    if field == 'MergedLLShear' or field == 'MergedMLShear':
+        cmd = 'tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {} --wildcards "{}"'.format(DATA_HOME,day[:4],day,OUT_HOME,field)
+        p = sp.Popen(cmd, shell=True)
+        p.wait()
+    else:
+        cmd = 'tar -xvf {}/{}/{}.tar -C {} --wildcards "{}"'.format(DATA_HOME,day[:4],day,OUT_HOME,field)
+        p = sp.Popen(cmd, shell=True)
+        p.wait()    
+   return None 
+
+def get_valid_files(files, valid_times):
+    '''
+    Given a set of files and a set of valid times,
+    Return only those files for which the time is valid
+    '''
+    # initialize valid_files dictionary
+    n = len(files)
+    valid_files = {}
+    keys = range(n)
+    for i in keys:
+        valid_files[i] = True
+    # check files; upgrade this by sorting and speeding up process
+    for idx, f in enumerate(files):
+        t = f.split('/')[-1]
+        if t not in valid_times:
+            valid_files[idx] = False
+
+    # Fill new_files list to contain the valid files
+    new_files = []
+    for key in valid_files.keys():
+        if valid_files[key] == False:
+            continue
+        else:
+            new_files.append(files[key])
+    return new_files
+
+def extract_after(day, potential_times,OUTPATH=lscratch, target=False):
+    '''
+    extracts the data to /lscratch only for given times
+    '''
+    OUT_HOME = OUTPATH
+    valid_times = potential_times # same thing, kind of 
+    if target == True:
+        fields = ['MESH']
+        # extract MESH code needed 
+    else:
+        fields = all_fields
+    # extract the day tarball 
+    for field in fields:
+        untar(field)
+    # Try to extract only the valid .netcdf.gz's 
+        if target == True:
+            field_path = '{}/target_MESH_Max_30min/{}/**/*.netcdf.gz'.format(OUT_HOME,field)
+        else:
+            field_path = '{}/{}'.format(OUT_HOME,field)
+        files = glob.glob('{}/**/*.netcdf.gz'.format(field_path))
+        valid_files = get_valid_files(files, valid_times) # return the valid files from the list of actual files and the valid times
+        # extract these files
+        for filename in valid_files:
+            gz = gzip.open(filename)
+            data = netCDF4.Dataset('dummy',mode='r',memory=gz.read())
+            dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
+            print('assigning')
+            dataset.to_netcdf('{}/{}/{}.netcdf'.format(lscratch,field,f[:15]))   
+    return None
+
+def full_extract(day, valid_times, OUTPATH):
+    ''' 
+    given the day, valid times, and OUTPATH, fully extract to /data
+    ''' 
+    # first extract inputs from t0 to t1, where t1 is the time where decide(MESH) == True
+    for t1 in valid_times:
+        t1 = time.strftime('%Y%m%d-%H%M%S')
+        date1 = datetime.datetime.strptime(t1, '%Y%m%d-%H%M%S')
+        t0 = (date1 - datetime.timedelta(minutes=31)).strftime('%Y%m%d-%H%M%S')
+        t2 = (date1 + datetime.timedelta(minutes=31)).strftime('%Y%m%d-%H%M%S')
+        input_times = [t0]
+        while t0 != t1:
+            # Advance by 1 second
+            t0 = (t0.strftime('%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
+            input_times.append(t0)
+        target_times = [t1]
+        while t1 != t2:
+            # Advance by one second
+            t1 = (t1.strftime('%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
+            target_times.append(t1)
+    extract_after(day, input_times, target=False)
+    extract_after(day, target_times, target=True)
+        
+
 
 def extract_nse(day,OUTPATH):
     year=day[:4]
@@ -245,6 +326,16 @@ def get_storm_info(day,OUTPATH):
     case_df = case_df.sort_values(['timedate'])
     case_df.to_csv('{}/{}/{}/csv/storms.csv'.format(TRAINING_HOME, year, day))
     return case_df
+
+def check_df(storms_df):
+    # take in df and return list of valid times for day
+    valid_times = []
+    for idx, row in storms_df.iterrows():
+        t0 = row['timedate']
+        is_Storm = row['is_Storm']
+        if is_Storm == True and t0 not in valid_times:
+            valid_times.append(t0)
+    return valid_times
 
 def check_MESH(storms_df, day,OUTPATH):
     OUT_HOME = OUTPATH
@@ -458,7 +549,8 @@ def main():
     samples = check_MESH(storms,day,OUT_PATH)
     t5 = time.time()
     print('check MESH;', t5-t4)
-    
+    times = check_df(samples)
+    print(times)
 #    accumulate(day,accum_fields,OUT_PATH) # accumulate the correct storms
     t6 = time.time()
     print('accumulated;',t6-t5)
