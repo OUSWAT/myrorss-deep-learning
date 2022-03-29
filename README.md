@@ -1,5 +1,25 @@
-Author: Michael Montalbano
+# Repository for facilitating and practicing deep-learning on the MYRORSS (1999-2011) Dataset!
 
-This repository contains code to extract merged data from processed tar files in the MYRORSS database.
-This will also include scripts that will manipulate the data and store them as training samples.
-Once the dataset is complete, I will train a UNet to predict MESH swaths. 
+This repository contains python scripts useful for converting MYRORSS (tars of radar days) into training samples stored as npys. 
+## Table of Contents
+
+**[Background](#background)**<br>
+**[Data Extraction/Transformation/Loading on supercomputer via slurm/python/wdss-ii](#placeholder)**<br>
+--[U-Net](#vmrms-processing-details)<br>
+
+---
+
+## Background
+
+> * TBD
+
+
+## Data Extraction/Transformation/Loading on supercomputer via slurm/python/wdss-ii
+
+
+* *links are applied like so ->:* [ftp://ftp.nssl.noaa.gov/users/tsmith/hail/hourly/](ftp://ftp.nssl.noaa.gov/users/tsmith/hail/hourly/)
+
+
+#### *U-Net*
+
+TBD
