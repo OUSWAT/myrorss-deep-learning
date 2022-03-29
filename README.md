@@ -11,15 +11,24 @@ This repository contains python scripts useful for converting MYRORSS (tars of r
 
 ## Background
 
-> * TBD
-
+MYRORSS reflectivity fields + 30-min max swaths of AzShear, Ref_0C + NSE (hourly) -> U-Net training -> next 30min MESH swath 
 
 ## Data Extraction/Transformation/Loading on supercomputer via slurm/python/wdss-ii
 
+relevant: extract_shell.py, ext_shell.sh, outer_loop.sh
 
-* *links are applied like so ->:* [ftp://ftp.nssl.noaa.gov/users/tsmith/hail/hourly/](ftp://ftp.nssl.noaa.gov/users/tsmith/hail/hourly/)
+Follow the main loop in extract_shell.py. 
 
+extract comp ref and MESH to lscratch (2 tasks) -> find storms with localmax -> checkMESH and update csv -> fully extract remaining storms (all fields to netcdf.gz from tarball) -> accumulate (still in lscratch) -> crop and write to /data directory 
+
+To run multiple, use outer_loop.sh (adjust start and end), which calls ext_shell.sh, then calls extract_shell.py for each day. 
+
+## Data Exploration
+
+relevant: review.py, load_data.py, plotlib.py
 
 #### *U-Net*
 
-TBD
+relevant: run_exp.py, run_exp_opt.py, u_net_loop.py
+
+Trains U-Net 
