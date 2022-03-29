@@ -11,6 +11,9 @@ from collections import Counter
 from util import open_pickle as op 
 import util
 from stats import stats
+from netCDF4 import Dataset
+
+DATA_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data/'
 
 def get_images(fname,step='testing'):
     # given an fname, open the pickle and return the images of interest
@@ -45,6 +48,26 @@ def summarize(outs):
         dist.append([image.max(),image.mean(),i])
     return dist
 
+def percent_above(field, thres, min_pixels):
+    ''' 
+    Return the percent of samples with field above val for min_pixels
+    '''
+    if field == 'target_MESH_Max_30min':
+        files = glob.glob('{}/2011/**/**/target_MESH_Max_30min/**/**/*netcdf'.format(DATA_HOME))
+        field = 'MESH_Max_30min'
+    else:
+        files = glob.glob('{}/2011/**/{}/**/*netcdf'.format(DATA_HOME,field))
+    num_above = 0
+    # open 
+    for f in files:
+        nc = Dataset(f)
+        var = nc.variables[field][:,:]
+        var = np.where(var<thres,0,var)
+        count = np.count_nonzero(var)
+        if count >= min_pixels:
+            num_above+=1
+    return num_above/len(files)
+    
 def main():
     fname_list = get_interesting_pickles()
     # skip the intersting loop writing for later
