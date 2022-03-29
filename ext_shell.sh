@@ -1,7 +1,7 @@
 #! /usr/bin/bash
 #SBATCH --job-name=strmMKR
 #SBATCH -p swat_plus
-#SBATCH -n 1
+#SBATCH --ntasks=2
 #SBATCH --tasks-per-node=1
 #SBATCH --exclusive=user
 #SBATCH --chdir /condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning
@@ -14,7 +14,7 @@ module load Python/3.9.5-GCCcore-10.3.0
 source ~/testflow/bin/activate
 
 echo "Running EXTRACTION: $DATE" 
-python extract_shell.py $DATE 
+python -u extract_shell.py $DATE 
  
 
 

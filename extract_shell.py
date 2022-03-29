@@ -20,7 +20,6 @@ from os import walk
 import xarray as xr
 import util 
 from netCDF4 import Dataset
-from datetime.datetime import strftime
 
 lscratch = os.environ.get('LSCRATCH')
 
@@ -41,8 +40,8 @@ NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorM
 min_accum_fields = ['MergedReflectivityQCComposite','MESH','MergedLLShear','MergedMLShear']
 fields_accum = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min']
 accum_fields = fields_accum
-all_fields = fields+NSE_fields
-
+all_fields = fields
+fields_to_accumulate = fields[1:-2] # don't include reflectivity (20 levels), only include Ref-0C
 ####################################
 # Functions 
 
@@ -64,14 +63,15 @@ def extract(day,OUTPATH,check=True):
     Note: this loop could perhaps be improved using dir_list = os.listdir(path) rather than looping with os.walk
     see: https://www.geeksforgeeks.org/create-an-empty-file-using-python/
     '''
+    iterfields = fields
     if check==True: # only unzip the composite reflectivity and MESH
-        fields = ['MESH','MergedReflectivityQCComposite']   
+        iterfields = ['MESH','MergedReflectivityQCComposite']   
 
 
     OUT_HOME = OUTPATH
     year = day[:4]
     # iterate over fields    
-    for field in fields:
+    for field in iterfields:
         if field == 'MergedLLShear' or field == 'MergedMLShear':
             #ry:
             #   os.system('tar -xvf {}/{}/Azshear/{}.tar -C {}/{}/{} --wildcards "{}"'.format(DATA_HOME,year,day,OUT_HOME,year,day,field))
@@ -103,8 +103,9 @@ def extract(day,OUTPATH,check=True):
                     dataset.to_netcdf('{}/{}/{}.netcdf'.format(lscratch,field,f[:15]))
     return None  
 
-def untar(day,field):
+def untar(day,field,OUT_HOME):
     # untars day for field
+    print(field)
     if field == 'MergedLLShear' or field == 'MergedMLShear':
         cmd = 'tar -xvf {}/{}/azimuthal_shear_only/{}.tar -C {} --wildcards "{}"'.format(DATA_HOME,day[:4],day,OUT_HOME,field)
         p = sp.Popen(cmd, shell=True)
@@ -113,7 +114,7 @@ def untar(day,field):
         cmd = 'tar -xvf {}/{}/{}.tar -C {} --wildcards "{}"'.format(DATA_HOME,day[:4],day,OUT_HOME,field)
         p = sp.Popen(cmd, shell=True)
         p.wait()    
-   return None 
+    return None 
 
 def get_valid_files(files, valid_times):
     '''
@@ -154,10 +155,10 @@ def extract_after(day, potential_times,OUTPATH=lscratch, target=False):
         fields = all_fields
     # extract the day tarball 
     for field in fields:
-        untar(field)
+        untar(day,field,OUT_HOME)
     # Try to extract only the valid .netcdf.gz's 
         if target == True:
-            field_path = '{}/target_MESH_Max_30min/{}/**/*.netcdf.gz'.format(OUT_HOME,field)
+            field_path = '{}/target_MESH_Max_30min/MESH_Max_30min'.format(OUT_HOME)
         else:
             field_path = '{}/{}'.format(OUT_HOME,field)
         files = glob.glob('{}/**/*.netcdf.gz'.format(field_path))
@@ -169,13 +170,16 @@ def extract_after(day, potential_times,OUTPATH=lscratch, target=False):
             dataset = xr.open_dataset(xr.backends.NetCDF4DataStore(data))
             print('assigning')
             dataset.to_netcdf('{}/{}/{}.netcdf'.format(lscratch,field,f[:15]))   
-    return None
+            dataset.to_netcdf('{}/test/{}.netcdf'.format(UNCROPPED_HOME,f[:15]))
+    
 
 def full_extract(day, valid_times, OUTPATH):
     ''' 
     given the day, valid times, and OUTPATH, fully extract to /data
     ''' 
     # first extract inputs from t0 to t1, where t1 is the time where decide(MESH) == True
+    print(day)
+    print(valid_times)
     for t1 in valid_times:
         t1 = time.strftime('%Y%m%d-%H%M%S')
         date1 = datetime.datetime.strptime(t1, '%Y%m%d-%H%M%S')
@@ -184,13 +188,15 @@ def full_extract(day, valid_times, OUTPATH):
         input_times = [t0]
         while t0 != t1:
             # Advance by 1 second
-            t0 = (t0.strftime('%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
+            t0 = (datetime.datetime.strptime(t0, '%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
             input_times.append(t0)
         target_times = [t1]
         while t1 != t2:
             # Advance by one second
-            t1 = (t1.strftime('%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
+            t1 = (datetime.datetime.strptime(t1, '%Y%m%d-%H%M%S') + datetime.timedelta(seconds=1)).strftime('%Y%m%d-%H%M%S')
             target_times.append(t1)
+    print(input_times)
+    print(target_times)
     extract_after(day, input_times, target=False)
     extract_after(day, target_times, target=True)
         
@@ -425,9 +431,9 @@ def accumulate(day, fields,OUTPATH):
     #for line in stdout:
     #    print(line.decode(),end='')     
     for field in fields:
-        folders = glob.glob('{}/{}_*30min'.format(OUT_HOME,field))
-        if field in folders:
-            continue
+        #folders = glob.glob('{}/{}_*30min'.format(OUT_HOME,field))
+        #if field in folders:
+        #    continue
         cmd = 'w2accumulator -i {}/code_index.xml -g {} -o {} -C 1 -t 30 --verbose="severe"'.format(OUT_HOME, field,OUT_HOME)
         p = sp.Popen(cmd,shell=True)
         stdout, stderr = p.communicate()
@@ -450,9 +456,9 @@ def cropconv(case_df, date,OUTPATH):
     OUT_HOME = OUTPATH
     myrorss_path = '{}/{}/'.format(TRAINING_HOME,year)
     #os.system('makeIndex.pl {}/{}/NSE code_index.xml'.format(myrorss_path,date))
-    cmd = 'makeIndex.pl {}/NSE code_index.xml'.format(OUT_HOME)
-    p = sp.Popen(cmd,shell=True)
-    p.wait()
+   # cmd = 'makeIndex.pl {}/NSE code_index.xml'.format(OUT_HOME)
+   # p = sp.Popen(cmd,shell=True)
+   # p.wait()
     products = ['MergedReflectivityQC','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min', 'MergedReflectivityQCComposite_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Min_30min']
     #products = ['MergedReflectivityQC']
     for idx, row in case_df.iterrows():
@@ -476,7 +482,7 @@ def cropconv(case_df, date,OUTPATH):
         for field in products:
             if os.path.isdir('{}/{}/storm{:04d}/{}'.format(myrorss_path, date,idx,field)):
                continue 
-            cmd = 'w2cropconv -i {}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
+            cmd = 'w2cropconv -i {}/code_index.xml -I {} -o /{}/{}/storm{:04d} -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n '.format(OUT_HOME, field, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
             p = sp.Popen(cmd,shell=True)
             p.wait()
 
@@ -486,13 +492,14 @@ def cropconv(case_df, date,OUTPATH):
         time2 = (date_1+datetime.timedelta(minutes=5,seconds=30)).strftime('%Y%m%d-%H%M%S')     
         
         cmd1 = "makeIndex.pl {} code_index.xml {} {}".format(OUT_HOME, time1, time2)
-        cmd2 = 'w2cropconv -i {}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n --verbose="severe"'.format(OUT_HOME, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
+        cmd2 = 'w2cropconv -i {}/code_index.xml -I MESH_Max_30min -o {}/{}/storm{:04d}/target_MESH_Max_30min -t "{} {}" -b "{} {}" -s "0.005 0.005" -R -n'.format(OUT_HOME, myrorss_path, date, idx, latNW, lonNW,latSE,lonSE)
         cmd3 = "makeIndex.pl {}/NSE code_index.xml {}0000 {}0000".format(OUT_HOME, time1[:11],time2[:11])
         
         p = sp.Popen(cmd1,shell=True)
         p.wait()
         p = sp.Popen(cmd2,shell=True)
         p.wait()
+        continue # skip NSE for now
 
         # NSE 
         # crop for 30 min prior to 30 min ahead
@@ -538,23 +545,28 @@ def main():
     t2 = time.time()
     print('extraction (NSE);',t2-t1)
     localmax(day,OUT_PATH)
-    print(glob.glob('{}/*'.format(lscratch)))
-    print(glob.glob('{}/MergedReflectivityQCComposite/**/*'.format(lscratch)))
+#    print(glob.glob('{}/*'.format(lscratch)))
+#    print(glob.glob('{}/MergedReflectivityQCComposite/**/*'.format(lscratch)))
 #    print(glob.glob('{}/20110326/**/'.format(lscratch))) 
     t3=time.time()
     print('localmax;', t3-t2)
     storms = get_storm_info(day,OUT_PATH)
     t4 = time.time()
     print('storm info;', t4-t3)
-    samples = check_MESH(storms,day,OUT_PATH)
+    samples = check_MESH(storms,day,OUT_PATH) # samples is a df like storms
     t5 = time.time()
     print('check MESH;', t5-t4)
-    times = check_df(samples)
-    print(times)
-#    accumulate(day,accum_fields,OUT_PATH) # accumulate the correct storms
+# BYPASS
+#    samples = pd.read_csv('/condo/swatwork/mcmontalbano/MYRORSS/data/2011/20110326/csv/storms.csv')
+    valid_times = check_df(samples)
+    print(valid_times)
+    full_extract(day, valid_times, OUT_PATH)
+    print(glob.glob('{}/**/*'.format(lscratch)))
+    accumulate(day,fields_to_accumulate,OUT_PATH) # accumulate the correct storms
+    print(glob.glob('{}/**/*'.format(lscratch)))
     t6 = time.time()
     print('accumulated;',t6-t5)
-#    dummy = cropconv (samples,day,OUT_PATH)
+    dummy = cropconv (samples,day,OUT_PATH)
     t7 = time.time()
     print('cropped and converted;',t7-t6)
     
