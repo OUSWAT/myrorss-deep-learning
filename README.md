@@ -23,11 +23,13 @@ extract comp ref and MESH to lscratch (2 tasks) -> find storms with localmax -> 
 
 To run multiple, use outer_loop.sh (adjust start and end), which calls ext_shell.sh, then calls extract_shell.py for each day. 
 
-## Data Exploration
+### Data Exploration
 
 relevant: review.py, load_data.py, plotlib.py
 
-#### *U-Net*
+## Deep-Learning
+
+### *U-Net*
 
 relevant: run_exp.py, run_exp_opt.py, u_net_loop.py
 
