@@ -21,11 +21,19 @@ Follow the main loop in extract_shell.py.
 
 extract comp ref and MESH to lscratch (2 tasks) -> find storms with localmax -> checkMESH and update csv -> fully extract remaining storms (all fields to netcdf.gz from tarball) -> accumulate (still in lscratch) -> crop and write to /data directory 
 
-To run multiple, use outer_loop.sh (adjust start and end), which calls ext_shell.sh, then calls extract_shell.py for each day. 
+### *Notes on checkMESH()*: 
+
+checkMESH checks the MESH field within a 60x60 pixel box centered on maxes in comp ref (using localmax). Critically, checkMESH() calls decide(), which contains the strategy for deciding whether or not to keep the sample. 
+
+Decide strategy: count number of pixels within a (smaller) 50x50 pixel box centered on max composite reflectivity. Count number of pixels with value > 20 mm. If there are 25 or more pixels above this threshold, extract the sample fully. This function is fundamental to forming the dataset and optimally training a predictor.
+
+### Extracting data for multiple days
+
+To run multiple, use outer_loop.sh (adjust start and enddate), which calls ext_shell.sh, then calls extract_shell.py for each day. 
 
 ### Data Exploration
 
-relevant: review.py, load_data.py, plotlib.py
+relevant: review.py, plotlib.py
 
 ## Deep-Learning
 
