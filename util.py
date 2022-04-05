@@ -31,6 +31,20 @@ def get_cases(year):
             cases.append(storm[:8])
     return cases
 
+def random_sample_npy(ins, outs, train_size=3000,s=3):
+    '''
+    Randomly samples a np array.
+    
+    @param ins Full set of training set inputs (examples x row x col x chan)
+    @param outs Corresponding set of sample (examples x nclasses)
+    '''
+
+    # Randomly select a set of example indices using random module
+    indices = random.choices(range(ins.shape[0]), k=train_size)
+
+    # The generator will produce a pair of return values: one for inputs and one for outputs
+    return ins[indices,:,:,:], outs[indices,:,:,:]
+
 # make hist of maxes
 def max_hist(images, title='Max MESH'):
     maxes = []
@@ -64,6 +78,10 @@ def get_days(year):
         if storm[:4] == year:
             cases.append(storm[:8])
     return cases
+
+def open_pickle(file):
+    r = pd.read_pickle(file)
+    return r
 
 #check if any of files in storm directory are missing using glob
 def check_day(date='20110409'):
@@ -159,6 +177,11 @@ def get_storms(year):
     return storms
 
 def load_npy(prefix='outs'):
+    '''
+    Purpose: load all npys in a directory with the same prefix
+             and return the combined npy
+     @param prefix - string prefix of .npy files 
+    '''
     # load npy with prefix and return as single np array (or npy)
     files = os.listdir('{}/{}'.format(HOME_HOME,'datasets'))
     names = []
