@@ -29,8 +29,8 @@ NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorM
 degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
 
 targets = ['target_MESH_Max_30min']
-products = multi_fields + NSE_fields + targets
-field_list = NSE_fields + swath_fields
+products = multi_fields  + targets
+field_list =  swath_fields
 # INPUT VARIABLES HERE
 # make this more elegant, to input from the shell. check e0xtract.py
 #year=str(sys.argv[1])
@@ -55,17 +55,18 @@ def info(df,i):
             return row['storm_path'], row['features']
        
 def load_data_from_df(df):
-    ins_full = []
-    outs_full = []
-    for idx, row in df.iterrows():
-        if idx == 20:
-            break
+    df_qc = df[df['features']>37]
+    df_qc = df_qc[df_qc['features']<50]
+    ins_full = np.asarray([])
+    outs_full = np.asarray([])
+    
+    for idx, row in df_qc.iterrows():
         n = int(row['features'])
-        print(n)
         storm = row['storm_path']
-        if n < 45:
+        if n < 36:
             continue # skip
-        ins = []
+        ins = np.asarray([]) 
+    #    outs_full = np.asarray([])        
         nc_files = []
         missing_fields = []
         #outs = []
@@ -73,7 +74,7 @@ def load_data_from_df(df):
         field = 'MergedReflectivityQC'
         for deg in degrees:
             nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg))
-            if nc_files == []:
+            if nc_file == []:
                 missing_fields.append(deg)
             else:
                 nc_files.append(nc_file[0])
@@ -89,18 +90,27 @@ def load_data_from_df(df):
                 else:
                     nc_files.append(nc_file[0])
             nc_files.append(nc_file[0])
-        print(missing_fields)
-        return nc_files
-        #print('nc_files',nc_files)
         if missing_fields != []:
             break
         for f in nc_files:
             nc = Dataset(f)
             var = nc.variables[f.split('/')[-3]][:,:]
             var = np.where(var<-20,0,var)
-            ins.append(var)
-        ins_full.append(ins)
-    return np.asarray(ins_full)
+            np.copyto(ins,var)
+        np.copyto(ins_full,ins,cast='same_kind')
+       # ins_full.append(np.asarray(ins))
+        # Append out to outs
+        target_file = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/**/*.netcdf'.format(storm))
+        f = target_file[0]        
+        if f == []:
+            ins_full.pop()
+            break
+        nc = Dataset(f)
+        var = nc.variables['MESH_Max_30min'][:,:]
+        var = np.where(var<0,0,var)
+        np.copyto(outs_full, var,cast='same_kind')
+       # outs_full.append(var)
+    return ins_full, outs_full
 
 def get_df_shapes(year='2011'):
     # check shape of ins for each storm_path
@@ -188,35 +198,25 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
-    year = '2011'
-    df = get_df_shapes(year='2011')
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    year = '2010'
-    df = get_df_shapes(year='2010')
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    #possible_df = pd.read_csv('csv/{}_missing.csv'.format(year))
-   
-    #df = possible_df[possible_df['features'] >= 45]
-   # if possible_df != []:
-   #     try:
-   #         df = pd.read_csv('csv/2011_missing.csv')
-   # 
-   #     except:
-   #         df = get_df_shapes()
-   # else:
-   #     df = pd.read(possible_df[0])
-    df = pd.read_csv('csv/2010_missing.csv')
+   # year = '2011'
+   # df = get_df_shapes(year='2011')
+   # print(df)
+   # df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    df = pd.read_csv('csv/2011_missing_fields.csv')
     ins, outs = load_data_from_df(df)
     ins = np.asarray(ins)
     outs = np.asarray(outs)
   #  ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
   #  outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 
-    np.save('datasets/ins_2010.npy',ins)
-    np.save('datasets/outs_2010.npy',outs)
+    np.save('datasets/ins_2011_fixed.npy',ins)
+    np.save('datasets/outs_2011.npy',outs)
         
-
-
+    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+    np.save('datasets/reshaped_ins_2011.npy',ins)
+    np.save('datasets/reshaped_outs_2011.npy',outs)
+    
 if __name__ == '__main__':
     main()
 
