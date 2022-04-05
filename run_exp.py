@@ -151,7 +151,7 @@ elif(supercomputer):
 if __name__ == "__main__":
     parser = create_parser() # load arguments
     args = parser.parse_args()  
-    ID = 'shave'
+    ID = '2011_qc'
     ins = np.load('{}/ins_{}.npy'.format(DATA_HOME, ID)) # load in and outs
     outs = np.load('{}/outs_{}.npy'.format(DATA_HOME, ID))
 
@@ -161,13 +161,14 @@ if __name__ == "__main__":
     
     # tranform onto 0-1 scale
     # returns the input nparray and the scaler used to transform it
+    print(ins_train.shape) 
     ins_train, scalers = transform(ins_train)
     ins_test, scalers = transform_test(ins_test,scalers)
-    pickle.dump(scalers, open('scaler_{}.pkl'.format(ID),'wb'))
+    pickle.dump(scalers, open('scaler_ins_{}.pkl'.format(ID),'wb'))
 
     outs_train, scalers = transform(outs_train)
     outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
-    pickle.dump(scalers, open('scaler_{}.pkl'.format(ID),'wb'))
+    pickle.dump(scalers[0], open('pickles/scaler_{}.pkl'.format(ID),'wb'))
 
     start = time.time()
     if swatml:
@@ -190,7 +191,7 @@ if __name__ == "__main__":
     # Fit the model
     history = model.fit(x=generator, 
                     epochs=args.epochs, 
-                    steps_per_epoch=20,
+                    steps_per_epoch=44,
                     use_multiprocessing=False, 
 #                    validation_data=(ins_val, outs_val),
                     verbose=True, 
@@ -222,13 +223,15 @@ if __name__ == "__main__":
     fp.close()
 
     # Save statistical results in a database
-    #stats, area = binary_accuracy(results['true_testing'],results['predict_testing'],outs_scaler)
-    #correct, total, TP, FP, TN, FN, events = stats
-    #far = FP/(FP+TN)
-    #pod = TP/(TP+FN)
-    #csi = (TP+TN)/(TP+TN+FP+FN)
-    #hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-    #row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+    stats, area = binary_accuracy(results['true_testing'],results['predict_testing'],outs_scaler)
+    correct, total, TP, FP, TN, FN, events = stats
+    far = FP/(FP+TN)
+    pod = TP/(TP+FN)
+    csi = (TP+TN)/(TP+TN+FP+FN)
+    hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
+    row = {'hyperparameters': fbase, 'far': far, 'pod': pod, 'csi': csi, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+    df.loc[len(df.index)] = row
+    df.to_csv('{}/performance_metrics.csv'.format(HOME_PATH))    
 
     # Model
     model.save("%s_model"%(fbase))
