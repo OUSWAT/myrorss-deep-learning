@@ -41,7 +41,7 @@ Before training, first use load_data to load the ins and outs, with ID as whatev
 
 ### *U-Net*
 
-Training on a 16k dataset with batch_size=44 takes over 2 hours. 
+Training on a 16k dataset with batch_size=44 takes over 2 hours. Compare with other batch_sizes, if performance increases enough to warrant the possible increase in compute-time.
 
 relevant: run_exp.py, run_exp_opt.py, u_net_loop.py
 
