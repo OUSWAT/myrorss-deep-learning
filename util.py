@@ -6,13 +6,15 @@ from os import walk
 from collections import Counter
 import datetime
 import matplotlib.pyplot as plt
+from numpy.random import default_rng 
+rng = default_rng()
 
 multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
-products = multi_fields + NSE_fields
+products = multi_fields
 degrees = ['00.50','  01.00','  01.50','  02.00','  03.00','  04.50','  06.00','  07.50','  09.00 ',' 11.00','  13.00','  15.00 ',' 17.00', ' 00.75', ' 01.25' ,' 01.75', ' 02.75' ,' 04.00 ',' 05.00 ',' 07.00  ','08.50  ','10.00', ' 12.00' ,' 14.00', ' 16.00'  ,'20.00']
 features = products + degrees
-print(len(degrees) + len(products))
+
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
@@ -31,7 +33,7 @@ def get_cases(year):
             cases.append(storm[:8])
     return cases
 
-def random_sample_npy(ins, outs, train_size=3000,s=3):
+def random_sample_npy(ins, outs, train_size=3000,seed=3):
     '''
     Randomly samples a np array.
     
@@ -79,10 +81,16 @@ def get_days(year):
             cases.append(storm[:8])
     return cases
 
-def open_pickle(file):
-    r = pd.read_pickle(file)
-    return r
+def op(file,dir=None):
+    # Open pickle (shortened to op for convenience)
+    if dir == None:
+        return pd.read_pickle(file)
+    else:
+        return pd.read_pickle('{}/{}'.format(file,dir))
 
+def get(ID):
+    # given an ID, return y_true, y_pred, and the scaler for the TESTING set
+    return 
 #check if any of files in storm directory are missing using glob
 def check_day(date='20110409'):
     """
