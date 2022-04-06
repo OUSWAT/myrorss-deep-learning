@@ -164,11 +164,11 @@ if __name__ == "__main__":
     print(ins_train.shape) 
     ins_train, scalers = transform(ins_train)
     ins_test, scalers = transform_test(ins_test,scalers)
-    pickle.dump(scalers, open('scaler_ins_{}.pkl'.format(ID),'wb'))
+    pickle.dump(scalers, open('scalers/scaler_ins_{}.pkl'.format(ID),'wb'))
 
     outs_train, scalers = transform(outs_train)
     outs_test, outs_test_scalers = transform_test(outs_test,scalers) # transform using standardscaler
-    pickle.dump(scalers[0], open('pickles/scaler_{}.pkl'.format(ID),'wb'))
+    pickle.dump(scalers[0], open('scalers/scaler_outs_{}.pkl'.format(ID),'wb'))
 
     start = time.time()
     if swatml:
