@@ -37,8 +37,12 @@ relevant: review.py, plotlib.py
 
 ## Deep-Learning
 
+Before training, first use load_data to load the ins and outs, with ID as whatever you choose. For example, the 2011 filtered dataset I call ID = "2011_qc". This is then entered into run_exp to pick the dataset to train on. 
+
 ### *U-Net*
+
+Training on a 16k dataset takes over 2 hours. 
 
 relevant: run_exp.py, run_exp_opt.py, u_net_loop.py
 
-Trains U-Net 
+
