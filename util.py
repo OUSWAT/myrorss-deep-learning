@@ -20,9 +20,37 @@ DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
+'''
+Start-up example:
+import util
+util.clear()
+ins, outs = util.load()
+new_ins, new_outs = util.filter(ins,outs,max_val=40,ID='2011_thres_40'
+'''
+
 def clear():
     # clear screen
     os.system('clear')
+
+def load():
+    # return ins, outs
+    return np.load('datasets/ins_2011_qc.npy'),  np.load('datasets/outs_2011_qc.npy')
+
+def filter(ins,outs,max_val=30,ID=None):
+    # given max_val, filter out ins and outs for only those where MESH_t-30.max() > max_val
+    new_ins = []
+    new_outs = []
+    for idx, val in enumerate(ins):
+        if val[:,:,-1].max()>max_val:
+            print(val[:,:,-1])
+            new_ins.append(val)
+            new_outs.append(outs[idx])
+    new_ins = np.asarray(new_ins) # use np.copyto instead
+    new_outs = np.asarray(new_outs) # ^
+    if ID:
+        np.save('datasets/ins_{}'.format(ID),new_ins)
+        np.save('datasets/outs_{}'.format(ID),new_outs)
+    return new_ins, new_outs
 
 def get_cases(year):
     cases = []

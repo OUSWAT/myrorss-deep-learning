@@ -17,6 +17,7 @@ from os import walk
 import xarray as xr
 import util 
 from netCDF4 import Dataset
+from scipy import ndimage
 
 lscratch = os.environ.get('LSCRATCH')
 DATA_HOME = '/condo/swatcommon/common/myrorss'
@@ -378,18 +379,18 @@ def decide(image):
     # given a MESH image, decide whether to keep the sample
     # take a subset in the center
     image = np.squeeze(image)
-    image = image[10:50,10:50]
+    image = image[20:40,20:40]
     MESH_pixels = 0 
     for row in image:
         for pixel in row:
             if pixel > 20: 
                 MESH_pixels+=1
-    if MESH_pixels > 25:
+    if MESH_pixels > 100:
         return True
     else:
         return False
 
-def pylocalmax(image):
+def pylocalmax(data):
     '''
     Uses python tech to run localmax on image from checkMESH
     Like decide(), this returns True or False to checkMESH()
@@ -397,9 +398,9 @@ def pylocalmax(image):
     '''
     threshold = 20
     neighborhood_size = 5
-    data_max = filters.maximum_filter(image, neighborhood_size)
+    data_max = ndimage.filters.maximum_filter(data, neighborhood_size)
     maxima = (data == data_max)
-    data_min = filters.minimum_filter(data, neighborhood_size)
+    data_min = ndimage.filters.minimum_filter(data, neighborhood_size)
     diff = ((data_max - data_min) > threshold)
     maxima[diff == 0] = 0
 
