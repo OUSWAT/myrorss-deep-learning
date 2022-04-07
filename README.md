@@ -33,10 +33,17 @@ To run multiple, use outer_loop.sh (adjust start and enddate), which calls ext_s
 
 ## Data Exploration
 
+### Dataset Creation
+
+Year: 2010
+Months: 05
+decide: 100 pixels with MESH > 20 within inner 40x40 pixel box 
+
 ### Datasets
 
 Datasets are saved in /myrorss-deep-learning/datasets. ID's include '2011_qc', 'shave'. 
 
+Note that, for any ins, the MESH_Max_30min swath is the last field, i.e. ins[:,:,:,-1]. 
 
 relevant: review.py, plotlib.py
 
@@ -61,6 +68,7 @@ Results:
 
 With decide: for MESH swath input (t-30), > 25 pixels with MESH > 20 mm
 ID: 2011_qc; N ~ 16k, 2 layers
+fields = 39 (ref + AzShear MESH and Comp swaths) 
 POD: 0.16, FAR: 0.1 
 Rating: Poor
 
