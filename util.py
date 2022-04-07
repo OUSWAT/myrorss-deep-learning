@@ -36,20 +36,40 @@ def load():
     # return ins, outs
     return np.load('datasets/ins_2011_qc.npy'),  np.load('datasets/outs_2011_qc.npy')
 
-def filter(ins,outs,max_val=30,ID=None):
+def compare_maxes(ins,outs,intersect0,intersect1):
+    # Assume that input MESH is ins[,,,-1]
+    x = ins[intersect0:intersect1,:,:,-1].squeeze()
+    y = outs[intersect0:intersect1,:,:,:].squeeze()
+    for idx, val in enumerate(x):
+        print(val.max(), y[idx].max())
+    return 
+
+def mcmfilter(ins,outs,max_val=30,min_pixels=50,ID=None):
     # given max_val, filter out ins and outs for only those where MESH_t-30.max() > max_val
     new_ins = []
     new_outs = []
+    ins = ins[:,:,:,-1].squeeze()
+    outs = outs[:,:,:,-1].squeeze()
+    for idx, img in enumerate(ins):
+        img = np.where(img<max_val,0,img)
+        img_out = outs[idx]
+        count_in = np.count_nonzero(img)
+        if count_in > min_pixels:
+            new_ins.append(img)
+            new_outs.append(img_out)
+    ''' FILTER BY MAX - probably not good
     for idx, val in enumerate(ins):
         if val[:,:,-1].max()>max_val:
-            print(val[:,:,-1])
+            print(val[:,:,-1].max())
             new_ins.append(val)
             new_outs.append(outs[idx])
+    '''
     new_ins = np.asarray(new_ins) # use np.copyto instead
     new_outs = np.asarray(new_outs) # ^
     if ID:
         np.save('datasets/ins_{}'.format(ID),new_ins)
         np.save('datasets/outs_{}'.format(ID),new_outs)
+    print(new_ins.shape,new_outs.shape)
     return new_ins, new_outs
 
 def get_cases(year):
@@ -251,17 +271,9 @@ def remove_missing(year='2011'):
                 os.system('rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) # remove missing
                 print(' rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) 
 def main():
-    days = get_cases('2011')
-    print('days',days)
-    old_df = []
-    for day in days:
-        print(day)
-        df = check_day_for_missing(day)  
-        if old_df == []:
-            old_df = df
-        else:
-            df = df.append(old_df, ignore_index=True)
-            old_df = df
-    df.to_csv('/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/missing.csv')
+    ins, outs = load()
+    new_ins, new_outs = mcmfilter(ins,outs,max_val=40,min_pixels=50,ID='2011_thres_40')
+    print(new_ins.shape,new_outs.shape)
+
 if __name__ == "__main__":
     main()
