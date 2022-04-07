@@ -50,7 +50,7 @@ Training on a 16k dataset with batch_size=44 takes over 2 hours. Compare with ot
 
 After training a model, a pickle (python object serialization, pickling is the process whereby a python object hierarchy is converted into a byte stream) will be saved to the /myrorss-deep-learning/results directory. If ID = '2011_qc', the results are saved in 2011_qc_results.pkl. From util module, import open_pickle and load up the pickle. This pickle contains a dictionary with the images used in training and testing sets, as well as the predictions for these sets. More information is there, as you can see by typing 'results_pickle.keys()'. For our purposes, we want the r['predict_testing'], the predictions for the test set, and r['true_testing'], the ground truth for the test set.
 
-From here, we use stats.py to run basic statistics on how well the model performed. To start, we use common metrics used in the field of pixelwise-prediction on images, like the Probability of Detection (POD), False Alarm Rate (FAR), and Critical Success Ratio (see Roebber 2008 or 2004). Additionally, one needs to load the scaler that was used to scale the ins and outs to be between -1 and 1 (or 0 and 1, I forget). The scaler is a pickle, opened in the same way, saved in /scalers as scaler_ins_2011_qc.pkl. Then, to collect the stats, use stats() from stats.py, loading it up like: 
+From here, we use stats.py to run basic statistics on how well the model performed. To start, we use common metrics used in the field of pixelwise-prediction on images, like the Probability of Detection (POD), False Alarm Rate (FAR), and Critical Success Ratio (see Roebber 2009). Additionally, one needs to load the scaler that was used to scale the ins and outs to be between -1 and 1 (or 0 and 1, I forget). The scaler is a pickle, opened in the same way, saved in /scalers as scaler_ins_2011_qc.pkl. Then, to collect the stats, use stats() from stats.py, loading it up like: 
 
 container = stats(y_true, y_pred, scaler_outs)
 POD, FAR, bias, CSI = [x for x in container]
@@ -64,6 +64,7 @@ ID: 2011_qc; N ~ 16k, 2 layers
 POD: 0.16, FAR: 0.1 
 Rating: Poor
 
-Dataset: SHAVE
+Dataset_ID: shave, N ~ 3.5 k, 2 layers
 POD: 0.29, FAR: 0.02
-Conclusion: confused. Something is different than it was before. Needs further review.
+Conclusion: The training appears to be happening differently on the supercomputer. Or there is an error in the process. Solution: Replicate on swat-machine. Verirfy model architecture and parameters. 
+
