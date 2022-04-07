@@ -28,7 +28,7 @@ def stats(y_true, y_pred,scaler):
     container, c = binary_accuracy(y_true, y_pred, scaler)
     correct, total, TP, FP, TN, FN, events = [x for x in container]   
     POD = TP/(TP + FN)
-    FAR = FN/(TP + FP) # SR = 1 - FAR 
+    FAR = FP/(TN + FP) # SR = 1 - FAR 
     bias = (TP + FP)/(TP + FN)
     CSI = TP / (TP + FP + FN)
     return [POD, FAR, bias, CSI]
@@ -108,9 +108,6 @@ def build_df(cases):
     df = pd.DataFrame(data={'days':days,'storms':storms})
     return df
 
-def open_pickle(file):
-    r = pd.read_pickle(file)
-    return r
 # Get the cases in year
 def get_cases(year = '1999'):
     cases = []
