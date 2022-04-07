@@ -6,21 +6,71 @@ from os import walk
 from collections import Counter
 import datetime
 import matplotlib.pyplot as plt
+from numpy.random import default_rng 
+rng = default_rng()
 
 multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
-products = multi_fields + NSE_fields
+products = multi_fields
 degrees = ['00.50','  01.00','  01.50','  02.00','  03.00','  04.50','  06.00','  07.50','  09.00 ',' 11.00','  13.00','  15.00 ',' 17.00', ' 00.75', ' 01.25' ,' 01.75', ' 02.75' ,' 04.00 ',' 05.00 ',' 07.00  ','08.50  ','10.00', ' 12.00' ,' 14.00', ' 16.00'  ,'20.00']
 features = products + degrees
-print(len(degrees) + len(products))
+
 
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
+'''
+Start-up example:
+import util
+util.clear()
+ins, outs = util.load()
+new_ins, new_outs = util.filter(ins,outs,max_val=40,ID='2011_thres_40'
+'''
+
 def clear():
     # clear screen
     os.system('clear')
+
+def load():
+    # return ins, outs
+    return np.load('datasets/ins_2011_qc.npy'),  np.load('datasets/outs_2011_qc.npy')
+
+def compare_maxes(ins,outs,intersect0,intersect1):
+    # Assume that input MESH is ins[,,,-1]
+    x = ins[intersect0:intersect1,:,:,-1].squeeze()
+    y = outs[intersect0:intersect1,:,:,:].squeeze()
+    for idx, val in enumerate(x):
+        print(val.max(), y[idx].max())
+    return 
+
+def mcmfilter(ins,outs,max_val=30,min_pixels=50,ID=None):
+    # given max_val, filter out ins and outs for only those where MESH_t-30.max() > max_val
+    new_ins = []
+    new_outs = []
+    ins = ins[:,:,:,-1].squeeze()
+    outs = outs[:,:,:,-1].squeeze()
+    for idx, img in enumerate(ins):
+        img = np.where(img<max_val,0,img)
+        img_out = outs[idx]
+        count_in = np.count_nonzero(img)
+        if count_in > min_pixels:
+            new_ins.append(img)
+            new_outs.append(img_out)
+    ''' FILTER BY MAX - probably not good
+    for idx, val in enumerate(ins):
+        if val[:,:,-1].max()>max_val:
+            print(val[:,:,-1].max())
+            new_ins.append(val)
+            new_outs.append(outs[idx])
+    '''
+    new_ins = np.asarray(new_ins) # use np.copyto instead
+    new_outs = np.asarray(new_outs) # ^
+    if ID:
+        np.save('datasets/ins_{}'.format(ID),new_ins)
+        np.save('datasets/outs_{}'.format(ID),new_outs)
+    print(new_ins.shape,new_outs.shape)
+    return new_ins, new_outs
 
 def get_cases(year):
     cases = []
@@ -30,6 +80,20 @@ def get_cases(year):
         if storm[:4] == year:
             cases.append(storm[:8])
     return cases
+
+def random_sample_npy(ins, outs, train_size=3000,seed=3):
+    '''
+    Randomly samples a np array.
+    
+    @param ins Full set of training set inputs (examples x row x col x chan)
+    @param outs Corresponding set of sample (examples x nclasses)
+    '''
+
+    # Randomly select a set of example indices using random module
+    indices = random.choices(range(ins.shape[0]), k=train_size)
+
+    # The generator will produce a pair of return values: one for inputs and one for outputs
+    return ins[indices,:,:,:], outs[indices,:,:,:]
 
 # make hist of maxes
 def max_hist(images, title='Max MESH'):
@@ -65,6 +129,16 @@ def get_days(year):
             cases.append(storm[:8])
     return cases
 
+def op(file,dir=None):
+    # Open pickle (shortened to op for convenience)
+    if dir == None:
+        return pd.read_pickle(file)
+    else:
+        return pd.read_pickle('{}/{}'.format(file,dir))
+
+def get(ID):
+    # given an ID, return y_true, y_pred, and the scaler for the TESTING set
+    return 
 #check if any of files in storm directory are missing using glob
 def check_day(date='20110409'):
     """
@@ -159,6 +233,11 @@ def get_storms(year):
     return storms
 
 def load_npy(prefix='outs'):
+    '''
+    Purpose: load all npys in a directory with the same prefix
+             and return the combined npy
+     @param prefix - string prefix of .npy files 
+    '''
     # load npy with prefix and return as single np array (or npy)
     files = os.listdir('{}/{}'.format(HOME_HOME,'datasets'))
     names = []
@@ -192,17 +271,9 @@ def remove_missing(year='2011'):
                 os.system('rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) # remove missing
                 print(' rm -r {}/{}/{}/{}'.format(TRAINING_HOME, day[:4], day, stormID)) 
 def main():
-    days = get_cases('2011')
-    print('days',days)
-    old_df = []
-    for day in days:
-        print(day)
-        df = check_day_for_missing(day)  
-        if old_df == []:
-            old_df = df
-        else:
-            df = df.append(old_df, ignore_index=True)
-            old_df = df
-    df.to_csv('/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/missing.csv')
+    ins, outs = load()
+    new_ins, new_outs = mcmfilter(ins,outs,max_val=40,min_pixels=50,ID='2011_thres_40')
+    print(new_ins.shape,new_outs.shape)
+
 if __name__ == "__main__":
     main()
