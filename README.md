@@ -61,9 +61,13 @@ From here, we use stats.py to run basic statistics on how well the model perform
 
 `
 import util
+
 r, scaler = util.op(ID)
+
 container = stats(r['true_testing'], r['predict_testing'], scaler)
+
 POD, FAR, bias, CSI = [x for x in container]
+
 print([x for x in container]
 `
 relevant: run_exp.py, run_exp_opt.py, u_net_loop.py, stats.py
