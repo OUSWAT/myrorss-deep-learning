@@ -59,9 +59,13 @@ After training a model, a pickle (python object serialization, pickling is the p
 
 From here, we use stats.py to run basic statistics on how well the model performed. To start, we use common metrics used in the field of pixelwise-prediction on images, like the Probability of Detection (POD), False Alarm Rate (FAR), and Critical Success Ratio (see Roebber 2009). Additionally, one needs to load the scaler that was used to scale the ins and outs to be between -1 and 1 (or 0 and 1, I forget). The scaler is a pickle, opened in the same way, saved in /scalers as scaler_ins_2011_qc.pkl. Then, to collect the stats, use stats() from stats.py, loading it up like: 
 
-container = stats(y_true, y_pred, scaler_outs)
+```
+import util
+r, scaler = util.op(ID)
+container = stats(r['true_testing'], r['predict_testing'], scaler)
 POD, FAR, bias, CSI = [x for x in container]
-
+print([x for x in container]
+```
 relevant: run_exp.py, run_exp_opt.py, u_net_loop.py, stats.py
 
 Results:
