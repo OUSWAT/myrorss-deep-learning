@@ -33,12 +33,15 @@ To run multiple, use outer_loop.sh (adjust start and enddate), which calls ext_s
 
 ## Data Exploration
 
+When comparing SHAVE and 2011_qc datasets, I get a list ```n_list``` which contains the number of pixels above a chosen threshold for every image in the dataset. The 2011_qc dataset has a much higher proportion of samples with very high (> 1000/3600 pixels) above threshold. A proportion of these could be removed.
+
+Also, the 2011_qc dataset contains no targets where max_MESH < 20, while SHAVE has no such restraint. 
+
 ### Dataset Creation
 
 Year: 2010
 Months: 05
 decide: 100 pixels with MESH > 20 within inner 40x40 pixel box 
-
 ### Datasets
 
 Datasets are saved in /myrorss-deep-learning/datasets. ID's include '2011_qc', 'shave'. 
@@ -70,13 +73,13 @@ relevant: run_exp.py, run_exp_opt.py, u_net_loop.py, stats.py
 
 Results:
 
-With decide: for MESH swath input (t-30), > 25 pixels with MESH > 20 mm
-ID: 2011_qc; N ~ 16k, 2 layers
-fields = 39 (ref + AzShear MESH and Comp swaths) 
-POD: 0.16, FAR: 0.1 
-Rating: Poor
-
 Dataset_ID: shave, N ~ 3.5 k, 2 layers
-POD: 0.29, FAR: 0.02
+POD: 0.44, FAR: ~ 0.2
 Conclusion: The training appears to be happening differently on the supercomputer. Or there is an error in the process. Solution: Replicate on swat-machine. Verirfy model architecture and parameters. 
+Param: 586 k
 
+Dataset_ID: 2011_qc, N ~ 15930, 
+POD: 0.22, FAR: 0.5, CSI: .44
+Architecture:  2 steps (60 -> 30 -> 15 -> 30 -> 60)
+Param: 586 k 
+train-time: >18 hr (check history)
