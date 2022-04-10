@@ -2,7 +2,7 @@
 # Author: Michael Montalbano
 # Date: 01/13/2021
 # Purpose: build U-Net for training by basic.py
-# Rather than unet.py, the network is built 
+# Rather than unet.py, the network is built
 # using loops that make hyperparameter-search easier
 #######################################################
 
@@ -18,9 +18,12 @@ from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
 
-def UNet(input_shape, nclasses=2, filters=[16,32], 
-            lambda_regularization = None, dropout = None,
-            activation='relu'):
+print(tf.__version__)
+
+
+def UNet(input_shape, nclasses=2, filters=[16, 32],
+         lambda_regularization=None, dropout=None,
+         activation='relu'):
     '''
     Builds a UNet using for loops.
 
@@ -31,118 +34,130 @@ def UNet(input_shape, nclasses=2, filters=[16,32],
     @param activation: pick any activation function within the keras API
     '''
 
-    lrelu = lambda x: tf.keras.activations.relu(x, alpha=0.1)
+    def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
     activation = lrelu
 
-    tensor_list = [] # used to store high-res tensors for skip connections to upsampled tensors (The Strings in the Net)
-    input_tensor = Input(shape=input_shape, name="input") # input images from sample as a tensor
-    tensor = BatchNormalization()(input_tensor)     # prevents overfitting by normalizing for each batch, i.e. for each batch of samples
-    tensor = GaussianNoise(0.1)(tensor) 
-    
-    filters = [16,32]
-    
+    # used to store high-res tensors for skip connections to upsampled tensors
+    # (The Strings in the Net)
+    tensor_list = []
+    # input images from sample as a tensor
+    input_tensor = Input(shape=input_shape, name="input")
+    # prevents overfitting by normalizing for each batch, i.e. for each batch
+    # of samples
+    tensor = BatchNormalization()(input_tensor)
+    tensor = GaussianNoise(0.1)(tensor)
+
+    filters = [32, 64, 128]
+
     # downsampling loop
     for idx, f in enumerate(filters[:-1]):
-        print(f)
+        print(tensor)
         tensor = Convolution2D(f,
-                            kernel_size=(3,3),
-                            padding='same',
-                            use_bias=True,
-                            kernel_initializer='random_uniform',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            activation=activation)(tensor)
+                               kernel_size=(3, 3),
+                               padding='same',
+                               use_bias=True,
+                               kernel_initializer='random_uniform',
+                               bias_initializer='zeros',
+                               kernel_regularizer=None,
+                               activation=activation)(tensor)
 
     # with downsampling swing finisor = BatchNormalization()(tensor)
-        tensor = Convolution2D(f,
-                            kernel_size=(3,3),
-                            padding='same',
-                            use_bias=True,
-                            kernel_initializer='random_uniform',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            activation=activation)(tensor)
+        print(tensor)
+        tensor = Convolution2D(filters[idx + 1],
+                               kernel_size=(3, 3),
+                               padding='same',
+                               use_bias=True,
+                               kernel_initializer='random_uniform',
+                               bias_initializer='zeros',
+                               kernel_regularizer=None,
+                               activation=activation)(tensor)
         if dropout is not None:
             tensor = Dropout(dropout)(tensor)
         tensor = BatchNormalization()(tensor)
 
-        tensor_list.append(tensor) # for use in skip
+        tensor_list.append(tensor)  # for use in skip
         print(tensor_list)
 
-        tensor = AveragePooling2D(pool_size=(2,2), strides=(2,2), padding='same')(tensor)
+        tensor = AveragePooling2D(
+            pool_size=(
+                2, 2), strides=(
+                2, 2), padding='same')(tensor)
     tensor = Convolution2D(filters[-1],  # grab last filter-count
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=None,
-                          activation=activation)(tensor)
-
+                           kernel_size=(3, 3),
+                           padding='same',
+                           use_bias=True,
+                           kernel_initializer='random_uniform',
+                           bias_initializer='zeros',
+                           kernel_regularizer=None,
+                           activation=activation)(tensor)
+    print(tensor)
     tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[-1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=None,
-                          activation=activation)(tensor)  
+                           kernel_size=(3, 3),
+                           padding='same',
+                           use_bias=True,
+                           kernel_initializer='random_uniform',
+                           bias_initializer='zeros',
+                           kernel_regularizer=None,
+                           activation=activation)(tensor)
+    print(tensor)
     tensor = BatchNormalization()(tensor)
     # upsampling loop
+    print(list(reversed(filters[:-1])))
     for idx, f in enumerate(list(reversed(filters[:-1]))):
-        tensor = UpSampling2D(size=2) (tensor) # increase dimension
-
-        tensor = Concatenate()([tensor, tensor_list.pop()]) # skip connection
+        print("before upsampling", tensor)
+        tensor = UpSampling2D(size=2)(tensor)  # increase dimension
+        print("After upsampling", tensor)
+        tensor = Add()([tensor, tensor_list.pop()])  # skip connection
+        print("after concatenation", tensor)
         tensor = Convolution2D(f,
-                            kernel_size=(3,3),
-                            padding='same',
-                            use_bias=True,
-                            kernel_initializer='random_uniform',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            activation=activation)(tensor)
+                               kernel_size=(3, 3),
+                               padding='same',
+                               use_bias=True,
+                               kernel_initializer='random_uniform',
+                               bias_initializer='zeros',
+                               kernel_regularizer=None,
+                               activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
-                            kernel_size=(3,3),
-                            padding='same',
-                            use_bias=True,
-                            kernel_initializer='random_uniform',
-                            bias_initializer='zeros',
-                            kernel_regularizer=None,
-                            activation=activation)(tensor)
+                               kernel_size=(3, 3),
+                               padding='same',
+                               use_bias=True,
+                               kernel_initializer='random_uniform',
+                               bias_initializer='zeros',
+                               kernel_regularizer=None,
+                               activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=None,
-                          activation=activation)(tensor)
-    
+                           kernel_size=(3, 3),
+                           padding='same',
+                           use_bias=True,
+                           kernel_initializer='random_uniform',
+                           bias_initializer='zeros',
+                           kernel_regularizer=None,
+                           activation=activation)(tensor)
 
     output_tensor = Convolution2D(1,
-                        kernel_size=(1,1),
-                        padding='same', 
-                        use_bias=True,
-                        kernel_initializer='random_uniform',
-                        bias_initializer='zeros',
-                        kernel_regularizer=None,
-                        activation=activation,name='output')(tensor)
-            
-    opt = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
-    
+                                  kernel_size=(1, 1),
+                                  padding='same',
+                                  use_bias=True,
+                                  kernel_initializer='random_uniform',
+                                  bias_initializer='zeros',
+                                  kernel_regularizer=None,
+                                  activation=activation, name='output')(tensor)
+
+    opt = keras.optimizers.Adam(
+        lr=0.0001,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=None,
+        decay=0.0,
+        amsgrad=False)
+
     model = Model(inputs=input_tensor, outputs=output_tensor)
 
     model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                      metrics=[tf.keras.metrics.MeanSquaredError()])
+                  metrics=[tf.keras.metrics.MeanSquaredError()])
 
     # model.compile(loss=custom,optimizer=opt,metrics=['mse'])
     return model
-
-
-
-    
-
-
