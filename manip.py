@@ -25,13 +25,65 @@ def get_pixel_list(outs, thres=20, ID='most_recent'):
     df.to_csv('n_list_{}.csv'.format(ID))
     return n_list
 
+def build_dataset(ins,outs,n):
+    # simple function to 
+    outs_indices = np.arange(0,len(outs),1)
+    # choose n random indices
+    choices = np.random.choice(outs_indices, n)
+    #new_ins = np.zeros(shape=(choices,ins.shape[1], 60,60)) 
+    new_ins, new_outs = [], []
+    for i in choices:
+        new_ins.append(ins[i,:,:,:])
+        new_outs.append(outs[i,:,:,:])
+    new_ins = np.asarray(new_ins)
+    new_outs = np.asarray(new_outs)
+    return new_ins, new_outs        
+
+def form_dataset_from_quants(ins1,outs1,ins2,outs2):
+    # Make two datasets similar by removing images semi-randomly based on image quantiles
+    quants1 = np.zeros((6))
+    quants2 = np.zeros((6))
+    for idx, MESH in enumerate(outs1):
+        quants = get_quantiles(MESH)
+        print(quants)
+        quants1 = np.mean(np.array([quants,quants1]))
+    for idx, MESH in enumerate(outs2):
+        quants = get_quantiles(MESH)
+        quants2 = np.mean(np.array([quants,quants2]))
+    print(quants1)
+    print(quants2)
+    indices = []
+    new_ins=[]
+    new_outs=[]
+    for idx, MESH in enumerate(outs1):
+        quants = get_quantiles(MESH)
+        diff = quants1 > quants
+        p = .1*(np.count_nonzero(diff==True))
+        if random.uniform(0,1) > p:
+            indices.append(idx)
+    for idx in indices:
+        new_ins.append(ins1[idx,:,:,:])
+        new_outs.append(outs1[idx,:,:,:])
+    new_ins = np.asarray(new_ins)
+    new_outs = np.asarray(new_outs)
+    np.save('datasets/ins_2011.npy',new_ins)
+    np.save('datasets/outs_2011.npy',new_outs)
+    return new_ins, new_outs
+ 
+def get_maxes():
+    '''
+    I need a function to basically get cat=whisker plots of each images MESH values 
+    for target or input MESH
+    '''
+    pass
+
 #def num_above(n):
     # simple function to return 
 
-def proportions(arr):
+def proportions(arr,div=20):
     total = len(arr)
     # Alternate method
-    bins = np.arange(0,3600,3600/10) 
+    bins = np.arange(0,3600,3600/div) 
     bin_indices = np.digitize(arr,bins)
     return Counter(bin_indices) 
 
