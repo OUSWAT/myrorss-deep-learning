@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 import util
-import sys
+import sys, stats
 import matplotlib.pyplot as plt
 from collections import Counter
 #from util import open_pickle as op
@@ -44,25 +44,26 @@ def form_dataset_from_quants(ins1,outs1,ins2,outs2):
     quants1 = np.zeros((6))
     quants2 = np.zeros((6))
     for idx, MESH in enumerate(outs1):
-        quants = get_quantiles(MESH)
+        quants = stats.get_quantiles(MESH)
         print(quants)
-        quants1 = np.mean(np.array([quants,quants1]))
+        quants1 = np.mean(np.array([quants,quants1])) # add then take mean, iteratively
     for idx, MESH in enumerate(outs2):
-        quants = get_quantiles(MESH)
-        quants2 = np.mean(np.array([quants,quants2]))
-    print(quants1)
+        quants = stats.get_quantiles(MESH)
+        quants2 = np.mean(np.array([quants,quants2])) # add, then mean
+    print(quants1) # display quants
     print(quants2)
     indices = []
     new_ins=[]
     new_outs=[]
+    # check outs1 to build returning nwe outs and ins
     for idx, MESH in enumerate(outs1):
-        quants = get_quantiles(MESH)
-        diff = quants1 > quants
-        p = .1*(np.count_nonzero(diff==True))
-        if random.uniform(0,1) > p:
-            indices.append(idx)
+        quants = stats.get_quantiles(MESH)
+        diff = quants1 > quants # return boolean list
+        p = .1*(np.count_nonzero(diff==True)) # for each True in list, increase p by 0.1
+        if random.uniform(0,1) > p: # if greater than p, then keep sample 
+            indices.append(idx)     # record keep_index
     for idx in indices:
-        new_ins.append(ins1[idx,:,:,:])
+        new_ins.append(ins1[idx,:,:,:]) 
         new_outs.append(outs1[idx,:,:,:])
     new_ins = np.asarray(new_ins)
     new_outs = np.asarray(new_outs)
