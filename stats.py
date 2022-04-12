@@ -2,10 +2,9 @@
 # Functions for stats and model analysis
 # Author: Michael Montalbano
 #
-# TODO:
-#       2. Taylor (2001) performance graph
+# stats.py
 
-import pickle
+import pickle, random
 import sys
 import os
 import glob
@@ -59,7 +58,12 @@ def stats(r, scaler):
     CSI = TP / (TP + FP + FN)
     return [POD, FAR, bias, CSI]
 
-
+def get_quantiles(image):
+    # return the quartiles
+    #image = np.flatten(image)
+    q = np.quantile(image,[0.25,0.5,0.75,0.9,0.95,1])
+    return q
+    
 def binary_accuracy(r, scaler):
     # return metrics for finding POD, FAR, CSI, etc
     y_true = r['true_testing']
@@ -211,20 +215,41 @@ def check_storm(storm_path):
 
 
 def main():
-    t1 = 'mse_1000_epochs_50_bs_64a128_filters_0.01_l2_2011_qc_results.pkl'
-    t2 = 'mse_1000_epochs_50_bs_64a128_filters_2011_qc_results.pkl'
-    t3 = 'mse_1000_epochs_50_bs_64a128_filters_0.11_l2_2011_qc_results.pkl'
-    t4 = 'mse_100_epochs_200_bs_2011_qc_results.pkl'
-    r1 = util.open_pickle(t1,'results')
-    r2 =  util.open_pickle(t2,'results')
-    r3 = util.open_pickle(t3,'results')
-    r4 = util.open_pickle(t4,'results')
-    scaler = util.open_pickle('scaler_outs_2011_qc.pkl','scalers')
-    scaler_raw = util.open_pickle('scaler_outs_raw.pkl','scalers')
-    print('POD, FAR, CSI')
-    print(t1,stats(r1,scaler))
-    print(t2,stats(r2,scaler))
-    print(t3,stats(r3,scaler))
-    print(t4,stats(r4,scaler))
+#    scaler = util.open_pickle('scaler_outs_2011_qc.pkl','scalers')
+#    scaler_raw = util.open_pickle('scaler_outs_raw.pkl','scalers')
+#    print('POD, FAR, bias, CSI')
+    ins1 = np.load('datasets/ins_2011_qc.npy')
+    outs1 = np.load('datasets/outs_2011.npy')
+    ins2 = np.load('datasets/ins_raw.npy')
+    outs2 = np.load('datasets/outs_raw.npy')
+    quants1 = np.zeros((6))
+    quants2 = np.zeros((6))
+
+    for idx, MESH in enumerate(outs1):
+        quants = get_quantiles(MESH)
+        print(quants)
+        quants1 = np.mean(np.array([quants,quants1]))        
+    for idx, MESH in enumerate(outs2):
+        quants = get_quantiles(MESH)
+        quants2 = np.mean(np.array([quants,quants2]))
+    print(quants1)
+    print(quants2)
+    indices = []
+    new_ins=[]
+    new_outs=[]
+'''    for idx, MESH in enumerate(outs1):
+        quants = get_quantiles(MESH)
+        diff = quants1 > quants
+        p = .1*(np.count_nonzero(diff==True))
+        if random.uniform(0,1) > p:
+            indices.append(idx)
+    for idx in indices:
+        new_ins.append(ins1[idx,:,:,:])
+        new_outs.append(outs1[idx,:,:,:])
+    new_ins = np.asarray(new_ins)
+    new_outs = np.asarray(new_outs)
+    np.save('datasets/ins_2011.npy',new_ins)
+    np.save('datasets/outs_2011.npy',new_outs)
+'''
 if __name__ == "__main__":
     main()
