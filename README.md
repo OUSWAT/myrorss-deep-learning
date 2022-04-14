@@ -1,4 +1,6 @@
-# Repository for facilitating and practicing deep-learning on the MYRORSS (1999-2011) Dataset!
+# Deep Learning with MYRORSS
+
+This repository contains methods for extracting MYRORSS data from its tar format stored on supercomputer, for manipulating that data, and using it in deep learning models. Specifically, I train a vanilla U-Net to predict 30-Minute MESH swaths, based on the previous thirty minutes of radar and NSE inputs. For questions about the MYRORSS dataset and anything else, please see the wiki.
 
 This repository contains python scripts useful for converting MYRORSS (tars of radar days) into training samples stored as npys. 
 ## Table of Contents
@@ -15,27 +17,19 @@ MYRORSS reflectivity fields + 30-min max swaths of AzShear, Ref_0C + NSE (hourly
 
 ## Data Extraction/Transformation/Loading on supercomputer via slurm/python/wdss-ii
 
-relevant: extract_shell.py, ext_shell.sh, outer_loop.sh
+### Extracting data for multiple days
 
-Follow the main loop in extract_shell.py. 
+To run multiple, use outer_loop.sh (adjust start and enddate), which calls ext_shell.sh, then calls extract_shell.py for each day. 
 
-extract comp ref and MESH to lscratch (2 tasks) -> find storms with localmax -> checkMESH and update csv -> fully extract remaining storms (all fields to netcdf.gz from tarball) -> accumulate (still in lscratch) -> crop and write to /data directory 
-
-### *Notes on checkMESH()*: 
+### *Notes on checkMESH()*: # MAYBE DONT USE, JUST SORT AFTER
 
 checkMESH checks the MESH field within a 60x60 pixel box centered on maxes in comp ref (using localmax). Critically, checkMESH() calls decide(), which contains the strategy for deciding whether or not to keep the sample. 
 
 Decide strategy: count number of pixels within a (smaller) 50x50 pixel box centered on max composite reflectivity. Count number of pixels with value > 20 mm. If there are 25 or more pixels above this threshold, extract the sample fully. This function is fundamental to forming the dataset and optimally training a predictor.
 
-### Extracting data for multiple days
-
-To run multiple, use outer_loop.sh (adjust start and enddate), which calls ext_shell.sh, then calls extract_shell.py for each day. 
-
 ## Data Exploration
 
-When comparing SHAVE and 2011_qc datasets, I get a list ```n_list``` which contains the number of pixels above a chosen threshold for every image in the dataset. The 2011_qc dataset has a much higher proportion of samples with very high (> 1000/3600 pixels) above threshold. A proportion of these could be removed.
 
-Also, the 2011_qc dataset contains no targets where max_MESH < 20, while SHAVE has no such restraint. 
 
 ### Dataset Creation
 
@@ -74,7 +68,7 @@ relevant: run_exp.py, run_exp_opt.py, u_net_loop.py, stats.py
 Results:
 
 Dataset_ID: shave, N ~ 3.5 k, 2 layers
-POD: 0.44, FAR: ~ 0.2
+POD: 0.44, FAR: ~ 0.2 
 Conclusion: The training appears to be happening differently on the supercomputer. Or there is an error in the process. Solution: Replicate on swat-machine. Verirfy model architecture and parameters. 
 Param: 586 k
 
