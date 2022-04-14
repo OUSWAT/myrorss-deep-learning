@@ -39,8 +39,21 @@ def build_dataset(ins,outs,n):
     new_outs = np.asarray(new_outs)
     return new_ins, new_outs        
 
-def form_dataset_from_quants(ins1,outs1,ins2,outs2):
+def get_probability(image,outs_shave):
+    # given an image, determine the probability of removal
+    # compare with N from SHAVE
+    # each comparison can add max .15 p 
+    indices = np.random.choice(np.arange(0,len(outs_shave),1),5) # get 5 indices 
+    p = 0 # probability
+    p_max = .15 
+    for index in indices:
+        shave_image = outs_shave[index,:,:,:]
+        p += p_max*(abs(np.mean(shave_image)-np.mean(image)))/(max(np.mean(shave_image),np.mean(image)))
+    return p      
+
+def new_dataset(ins_prev,outs_prev,ins_standard,outs_standard,ID='most_recent'):
     # Make two datasets similar by removing images semi-randomly based on image quantiles
+    '''
     quants1 = np.zeros((6))
     quants2 = np.zeros((6))
     for idx, MESH in enumerate(outs1):
@@ -52,14 +65,30 @@ def form_dataset_from_quants(ins1,outs1,ins2,outs2):
         quants2 = np.mean(np.array([quants,quants2])) # add, then mean
     print(quants1) # display quants
     print(quants2)
+    new_ins = []
+    new_outs = []
     indices = []
-    new_ins=[]
-    new_outs=[]
     # check outs1 to build returning nwe outs and ins
-    for idx, MESH in enumerate(outs1):
+    for idx, MESH in enumerate(outs_prev):
         quants = stats.get_quantiles(MESH)
         diff = quants1 > quants # return boolean list
         p = .1*(np.count_nonzero(diff==True)) # for each True in list, increase p by 0.1
+        if random.uniform(0,1) > p: # if greater than p, then keep sample
+            indices.append(idx)     # record keep_index
+    for idx in indices:
+        new_ins.append(ins1[idx,:,:,:])
+        new_outs.append(outs1[idx,:,:,:])
+    new_ins = np.asarray(new_ins)
+    new_outs = np.asarray(new_outs)
+    np.save('datasets/ins_2011_a.npy',new_ins)
+    np.save('datasets/outs_2011_a.npy',new_outs)
+    '''
+    new_ins = []
+    new_outs = []
+    indices = []
+    # check outs1 to build returning nwe outs and ins
+    for idx, image in enumerate(outs_prev):
+        p = get_probability(image, outs_standard) # can't we just have outs_shave already asssigned? 
         if random.uniform(0,1) > p: # if greater than p, then keep sample 
             indices.append(idx)     # record keep_index
     for idx in indices:
@@ -67,8 +96,8 @@ def form_dataset_from_quants(ins1,outs1,ins2,outs2):
         new_outs.append(outs1[idx,:,:,:])
     new_ins = np.asarray(new_ins)
     new_outs = np.asarray(new_outs)
-    np.save('datasets/ins_2011.npy',new_ins)
-    np.save('datasets/outs_2011.npy',new_outs)
+    np.save('datasets/ins_2011_{}.npy'.format(ID),new_ins)
+    np.save('datasets/outs_2011_{}.npy'.format(ID),new_outs)
     return new_ins, new_outs
  
 def get_maxes():
@@ -97,19 +126,20 @@ def plot_hist(numbers, threshold, ID='most_recent'):
     return None
 
 def main():
+    '''
     threshold = 20  # use 25 MM threshold
-    n_list1 = get_pixel_list(outs, threshold, '2011_qc')
+    n_list1 = get_pixel_list(outs, threshold, '2011')
     outs2 = np.load('datasets/outs_shave.npy')
     # get the list of pixels above threshold for each image in outs)
     n_list2 = get_pixel_list(outs2, threshold, 'raw')
-
     #plot_hist(n_list1, threshold, '2011_qc')
-
     Counter_2011 = proportions(n_list1)
-    
-    Counter_raw = proportions(n_list2)    
-    print(Counter_2011)
-    print(Counter_raw)
+    '''
+    ins = np.load('datasets/ins_2011_qc.npy')
+    outs = np.load('datasets/outs_2011_qc.npy')
+    ins_shave = np.load('datasets/ins_raw.npy')
+    outs_shave = np.load('datasets/outs_raw.npy')
+    ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
 
 if __name__ == "__main__":
     main()
