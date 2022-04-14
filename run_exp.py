@@ -1,6 +1,9 @@
 ##############################################
 # Author: Michael Montalbano
 # Date: 1/20/22
+# 
+# tasks: - fix saving results in a df (no unnamed column creation)
+#        - add validation set and read during training
 
 import numpy as np
 import pandas as pd
@@ -36,17 +39,17 @@ def create_parser():
     parser.add_argument(
         '-ID',
         type=str,
-        default='2011_qc',
+        default='2011_80',
         help='ID of dataset')
     parser.add_argument(
         '-exp_type',
         type=str,
-        default='mse_600_epochs_50_bs',
+        default='64a128_filters',
         help='How to name this model?')
     parser.add_argument(
         '-batch_size',
         type=int,
-        default=50,
+        default=100,
         help='Enter the batch size.')
     parser.add_argument(
         '-dropout',
@@ -61,8 +64,25 @@ def create_parser():
     parser.add_argument(
         '-epochs',
         type=int,
-        default=600,
+        default=300,
         help='Training epochs')
+    parser.add_argument(
+        '-steps',
+        type=int,
+        default=2,
+        help='Steps per epoch')
+    parser.add_argument(
+        '-filters',
+        type=int,
+        default=[
+            64,
+            128],
+        help='Enter the number of filters for convolutional network')
+    parser.add_argument(
+        '-unet_type',
+        type=str,
+        default='add',
+        help='Enter whether to concatenate or add during skips in unet')
     parser.add_argument(
         '-results_path',
         type=str,
@@ -76,26 +96,13 @@ def create_parser():
     parser.add_argument(
         '-patience',
         type=int,
-        default=1000,
+        default=75,
         help="Patience for early termination")
     parser.add_argument(
         '-network',
         type=str,
         default='unet',
         help='Enter u-net.')
-    parser.add_argument(
-        '-unet_type',
-        type=str,
-        default='add',
-        help='Enter whether to concatenate or add during skips in unet')
-    parser.add_argument(
-        '-filters',
-        type=int,
-        default=[
-            64,
-            128,
-            256],
-        help='Enter the number of filters for convolutional network')
     parser.add_argument(
         '-activation',
         type=str,
@@ -251,27 +258,31 @@ outs = np.load('datasets/outs_{}.npy'.format(args.ID))
 #outs = np.reshape(outs, (outs.shape[0], 60, 60, outs.shape[1]))
 #outs = np.squeeze(outs)
 indices = np.asarray(range(ins.shape[0]))
+ins_train, ins_val, outs_train, outs_val = train_test_split(
+    ins, outs, test_size=0.16, random_state=3)
 ins_train, ins_test, outs_train, outs_test = train_test_split(
-    ins, outs, test_size=0.25, random_state=3)
-ins_train_indices, ins_test_indices, outs_train_indices, outs_test_indices = train_test_split(
-    indices, indices, test_size=0.25, random_state=3)
+    ins_train, outs_train, test_size=0.16, random_state=3)
+#ins_train_indices, ins_test_indices, outs_train_indices, outs_test_indices = train_test_split(
+#    indices, indices, test_size=0.25, random_state=3)
 # scaling
 ins_train, scalers = transform(ins_train)
-ins_test, scalers = transform_test(ins_test, scalers)
-pickle.dump(scalers, open('scalers/scaler_{}.pkl'.format(ID), 'wb'))
+ins_val, scalers = transform(ins_val)
+#pickle.dump(scalers, open('scalers/scaler_{}.pkl'.format(args.ID), 'wb'))
+ins_test, scalers = transform(ins_test)
 outs_train, scalers = transform(outs_train)
+outs_val, scalers = transform(outs_val)
 outs_test, outs_test_scalers = transform_test(
     outs_test, scalers)  # transform using standardscaler
 # save the transformation scaler for the true test set
 outs_scaler = outs_test_scalers[0]
-pickle.dump(outs_scaler, open('scalers/scaler_outs_{}.pkl'.format(ID), 'wb'))
+pickle.dump(outs_scaler, open('scalers/scaler_outs_{}.pkl'.format(args.ID), 'wb'))
 
 start = time.time()
 if swatml:
     with strategy.scope():
         model = UNet(ins_train.shape[1:], nclasses=1)
 elif supercomputer:
-    model = UNet(ins_train.shape[1:], nclasses=1)  # create model
+    model = UNet(ins_train.shape[1:], nclasses=1,filters=args.filters, lambda_regularization=args.lambda_regularization, dropout=args.dropout)  # create model
     '''
     model = create_uNet(ins_train.shape[1:], nclasses=5,lambda_regularization=args.lambda_regularization,
                         activation=args.activation, dropout=args.dropout,
@@ -289,17 +300,15 @@ generator = training_set_generator_images(
     input_name='input',
     output_name='output')
 early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
-                                                  monitor='mean_squared_error',
+                                                  monitor='val_loss',
                                                   restore_best_weights=True,
                                                   min_delta=0.0)
 # Fit the model
 history = model.fit(x=generator,
                     epochs=args.epochs,
-                    steps_per_epoch=10,
-                    # there is a relationship to find this, search google for
-                    # steps per epoch
+                    steps_per_epoch=args.steps,
                     use_multiprocessing=False,
-                    #                    validation_data=(ins_val, outs_val),
+                    validation_data=(ins_val, outs_val),
                     verbose=True,
                     callbacks=[early_stopping_cb])
 
@@ -314,14 +323,12 @@ results['true_training'] = outs_train
 results['true_testing'] = outs_test
 results['predict_testing'] = model.predict(ins_test)
 results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
-results['outs_test_indices'] = outs_test_indices
+#results['outs_test_indices'] = outs_test_indices
 #results['folds'] = folds
 results['history'] = history.history
 
 # Save results
-dataset = 'shave'
-exp_type = 'mse'
-fbase = r"results/{}_{}".format(args.exp_type, args.ID)
+fbase = r"results/{}_{}e_{}b_{}l2_{}s".format(args.ID, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
 results['fname_base'] = fbase
 fp = open("%s_results.pkl" % (fbase), "wb")
 pickle.dump(results, fp)
