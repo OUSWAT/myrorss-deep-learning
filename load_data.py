@@ -19,6 +19,9 @@ from ast import literal_eval
 from netCDF4 import Dataset
 import glob, util
 import util
+from ast import literal_eval
+
+# load new datasets
 
 home = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 DATA_HOME = '/condo/swatcommon/common/myrorss'
@@ -36,7 +39,14 @@ field_list =  swath_fields
 #year=str(sys.argv[1])
 #b0=int(sys.argv[2])
 #b1=int(sys.argv[3])
-year='2011'
+year='2010'
+
+def make_dict():
+    valid_fields = {}
+    keys = degrees+swath_fields+targets
+    for key in keys:
+        valid_fields = True
+    return valid_fields
 
 # Get the cases in year
 def get_cases(year):
@@ -55,25 +65,55 @@ def info(df,i):
             return row['storm_path'], row['features']
        
 def load_data_from_df(df):
-    df_qc = df[df['features']>37]
-    df_qc = df_qc[df_qc['features']<50]
-    ins_full = np.asarray([])
-    outs_full = np.asarray([])
-    
-    for idx, row in df_qc.iterrows():
-        n = int(row['features'])
+    ins_full = [] # initialize
+    outs_full = []
+   
+    # now we iterate through each row in the dataframe 
+    for idx, row in df.iterrows():
+        n = int(row['features']) # get the number of features
         storm = row['storm_path']
-        if n < 36:
-            continue # skip
-        ins = np.asarray([]) 
-    #    outs_full = np.asarray([])        
+        fname_list = literal_eval(row['feature_list']) # get list of file names
+       
+        ins = [] 
         nc_files = []
         missing_fields = []
-        #outs = []
-        # grab reflcectivity first        
-        field = 'MergedReflectivityQC'
+        valid_fields = make_dict()
+        for fname in fname_list:
+            field = fname.split('/')[-3]
+            if field == "MESH_Max_30min":
+                if fname.split('/')[-5] == 'target_MESH_Max_30min':
+                    valid_fields['target_MESH_Max_30min'] = False
+                    nc = Dataset(fname)
+                    var = nc.variables['MESH_Max_30min'][:,:]
+                    var = np.where(var<-20,0,var)
+                    outs.append(var)
+                else:
+                    valid_fields[field] = False
+                    nc = Dataset(fname)
+                    var = nc.variables['MESH_Max_30min'][:,:]
+                    var = np.where(var<-20,0,var)
+                    ins.append(var)
+            if field == "MergedReflectivityQC":
+                field = fname.split('/')[-2]
+                valid_fields[field] = False
+                nc = Dataset(fname)
+                var = nc.variables['MergedReflectivityQC'][:,:]
+                var = np.where(var<-20,0,var)
+                ins.append(var)
+            else:
+                valid_fields[field] = False
+                nc = Dataset(fname)
+                var = nc.variables[field][:,:]
+                var = np.where(var<-20,0,var)
+                ins.append(var)
+        if all(value == False for value in valid_files.values()):
+            ins_full.append(ins)
+            outs_full.append(outs)
+    return ins_full, outs_full 
+        '''
+
         for deg in degrees:
-            nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg))
+            nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg)) # can we return signal if there are either multiple single or none? 
             if nc_file == []:
                 missing_fields.append(deg)
             else:
@@ -91,13 +131,16 @@ def load_data_from_df(df):
                     nc_files.append(nc_file[0])
             nc_files.append(nc_file[0])
         if missing_fields != []:
+            nc_files = [] 
+            nc_files = []
+            missing_fiels = []
             break
         for f in nc_files:
             nc = Dataset(f)
             var = nc.variables[f.split('/')[-3]][:,:]
             var = np.where(var<-20,0,var)
-            np.copyto(ins,var)
-        np.copyto(ins_full,ins,cast='same_kind')
+            ins.append(var) 
+        ins_full.append(ins)
        # ins_full.append(np.asarray(ins))
         # Append out to outs
         target_file = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/**/*.netcdf'.format(storm))
@@ -108,7 +151,7 @@ def load_data_from_df(df):
         nc = Dataset(f)
         var = nc.variables['MESH_Max_30min'][:,:]
         var = np.where(var<0,0,var)
-        np.copyto(outs_full, var,cast='same_kind')
+        outs_full.append(var)
        # outs_full.append(var)
     return ins_full, outs_full
 
@@ -198,24 +241,30 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
-   # year = '2011'
-   # df = get_df_shapes(year='2011')
+    year = '2009'
+  #  df10 = get_df_shapes(year='2010')
    # print(df)
-   # df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    df = pd.read_csv('csv/2011_missing_fields.csv')
+  #  df10.to_csv('csv/{}_missing_fields.csv'.format(year))
+   # year = '2009'
+   # df09 = get_df_shapes(year='2009')
+   # df09.to_csv('csv/{}_missing_fields.csv'.format(year))
+  # df = pd.read_csv('csv/2011_missing_fields.csv')
+    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
     ins, outs = load_data_from_df(df)
+    print(ins)
+    print(outs)
     ins = np.asarray(ins)
     outs = np.asarray(outs)
-  #  ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-  #  outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-
-    np.save('datasets/ins_2011_fixed.npy',ins)
-    np.save('datasets/outs_2011.npy',outs)
-        
     ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
     outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-    np.save('datasets/reshaped_ins_2011.npy',ins)
-    np.save('datasets/reshaped_outs_2011.npy',outs)
+
+    np.save('datasets/ins_{}.npy'.format(year),ins)
+    np.save('datasets/outs_{}.npy'.format(year),outs)
+        
+#    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+#    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+#    np.save('datasets/reshaped_ins_2011.npy',ins)
+#    np.save('datasets/reshaped_outs_2011.npy',outs)
     
 if __name__ == '__main__':
     main()
