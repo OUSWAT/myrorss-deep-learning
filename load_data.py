@@ -45,7 +45,7 @@ def make_dict():
     valid_fields = {}
     keys = degrees+swath_fields+targets
     for key in keys:
-        valid_fields = True
+        valid_fields[key] = True
     return valid_fields
 
 # Get the cases in year
@@ -73,7 +73,7 @@ def load_data_from_df(df):
         n = int(row['features']) # get the number of features
         storm = row['storm_path']
         fname_list = literal_eval(row['feature_list']) # get list of file names
-       
+        fname_list = sorted(fname_list) # sort to ensure consistent order
         ins = [] 
         nc_files = []
         missing_fields = []
@@ -82,35 +82,42 @@ def load_data_from_df(df):
             field = fname.split('/')[-3]
             if field == "MESH_Max_30min":
                 if fname.split('/')[-5] == 'target_MESH_Max_30min':
-                    valid_fields['target_MESH_Max_30min'] = False
-                    nc = Dataset(fname)
-                    var = nc.variables['MESH_Max_30min'][:,:]
-                    var = np.where(var<-20,0,var)
-                    outs.append(var)
+                    if valid_fields[field] == True:
+                        valid_fields['target_MESH_Max_30min'] = False
+                        nc = Dataset(fname)
+                        var = nc.variables['MESH_Max_30min'][:,:]
+                        var = np.where(var<-20,0,var)
+                        outs.append(var)
                 else:
-                    valid_fields[field] = False
-                    nc = Dataset(fname)
-                    var = nc.variables['MESH_Max_30min'][:,:]
-                    var = np.where(var<-20,0,var)
-                    ins.append(var)
+                    if valid_fields[field] == True:
+                        valid_fields[field] = False
+                        nc = Dataset(fname)
+                        var = nc.variables['MESH_Max_30min'][:,:]
+                        var = np.where(var<-20,0,var)
+                        ins.append(var)
             if field == "MergedReflectivityQC":
                 field = fname.split('/')[-2]
-                valid_fields[field] = False
-                nc = Dataset(fname)
-                var = nc.variables['MergedReflectivityQC'][:,:]
-                var = np.where(var<-20,0,var)
-                ins.append(var)
+                if valid_fields[field] == True:
+                    valid_fields[field] = False
+                    nc = Dataset(fname)
+                    var = nc.variables['MergedReflectivityQC'][:,:]
+                    var = np.where(var<-20,0,var)
+                    ins.append(var)
             else:
-                valid_fields[field] = False
-                nc = Dataset(fname)
-                var = nc.variables[field][:,:]
-                var = np.where(var<-20,0,var)
-                ins.append(var)
-        if all(value == False for value in valid_files.values()):
+                try:
+                    if valid_fields[field] == True:
+                        valid_fields[field] = False
+                        nc = Dataset(fname)
+                        var = nc.variables[field][:,:]
+                        var = np.where(var<-20,0,var)
+                        ins.append(var)
+                except:
+                    pass
+        if all(value == False for value in valid_fields.values()):
             ins_full.append(ins)
             outs_full.append(outs)
     return ins_full, outs_full 
-        '''
+    '''    
 
         for deg in degrees:
             nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg)) # can we return signal if there are either multiple single or none? 
@@ -154,7 +161,7 @@ def load_data_from_df(df):
         outs_full.append(var)
        # outs_full.append(var)
     return ins_full, outs_full
-
+    '''
 def get_df_shapes(year='2011'):
     # check shape of ins for each storm_path
     # return df of shape and path
