@@ -13,10 +13,12 @@ from collections import Counter
 #mesh = ins[:, -1, :, :]  # grab input mesh only
 #outs = np.load('datasets/outs_2011_qc.npy')
 
-def get_proportions(outs):
+def get_hist(outs):
     # given proportions, alter a dataset to conform to these proportions
     maxes = [x.max() for x in outs]
-    return maxes
+    bins = [0,15,30,45,65,100] # np.arange(0,100,15)
+    hist, edges = np.histogram(maxes,bins)
+    return hist
 
 def get_pixel_list(outs, thres=20, ID='most_recent'):
     # returns the number of pixels above threshold for each image, as a list
