@@ -39,7 +39,7 @@ field_list =  swath_fields
 #year=str(sys.argv[1])
 #b0=int(sys.argv[2])
 #b1=int(sys.argv[3])
-year='2010'
+year='2008'
 
 def make_dict():
     valid_fields = {}
@@ -72,17 +72,23 @@ def load_data_from_df(df):
     for idx, row in df.iterrows():
         n = int(row['features']) # get the number of features
         storm = row['storm_path']
-        fname_list = literal_eval(row['feature_list']) # get list of file names
+        print(row['feature_list'])
+        try:
+            fname_list = literal_eval(row['feature_list']) # get list of file names
+        except:
+            fname_list = row['feature_list']
         fname_list = sorted(fname_list) # sort to ensure consistent order
-        ins = [] 
+        ins = []
+        outs = [] 
         nc_files = []
         missing_fields = []
         valid_fields = make_dict()
         for fname in fname_list:
             field = fname.split('/')[-3]
             if field == "MESH_Max_30min":
-                if fname.split('/')[-5] == 'target_MESH_Max_30min':
-                    if valid_fields[field] == True:
+                print(fname,'1',valid_fields)
+                if fname.split('/')[-4] == 'target_MESH_Max_30min':
+                    if valid_fields['target_MESH_Max_30min'] == True:
                         valid_fields['target_MESH_Max_30min'] = False
                         nc = Dataset(fname)
                         var = nc.variables['MESH_Max_30min'][:,:]
@@ -114,8 +120,11 @@ def load_data_from_df(df):
                 except:
                     pass
         if all(value == False for value in valid_fields.values()):
+            print('successful',storm)
             ins_full.append(ins)
             outs_full.append(outs)
+        else:
+            print('not successful',valid_fields)
     return ins_full, outs_full 
     '''    
 
@@ -248,18 +257,13 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
-    year = '2009'
-  #  df10 = get_df_shapes(year='2010')
-   # print(df)
-  #  df10.to_csv('csv/{}_missing_fields.csv'.format(year))
-   # year = '2009'
-   # df09 = get_df_shapes(year='2009')
-   # df09.to_csv('csv/{}_missing_fields.csv'.format(year))
+    year = '2011'
+    df = get_df_shapes(year)
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
   # df = pd.read_csv('csv/2011_missing_fields.csv')
-    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
-    ins, outs = load_data_from_df(df)
-    print(ins)
-    print(outs)
+    #df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
+    ins, outs = load_data_from_df(df)   
+   
     ins = np.asarray(ins)
     outs = np.asarray(outs)
     ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
