@@ -206,8 +206,7 @@ def get_days(year):
             cases.append(storm[:8])
     return cases
 
-
-def op(file, dir=None):
+def open_pickle(file, dir=None):
     # Open pickle (shortened to op for convenience)
     if dir is None:
         return pd.read_pickle(file)
