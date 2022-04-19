@@ -1,7 +1,7 @@
 #
 # Author: Michael Montalbano
 # Purpose: Maniputate datasets to form new datasets
-
+# title: 
 import numpy as np
 import pandas as pd
 import util, random
@@ -9,10 +9,14 @@ import sys, stats
 import matplotlib.pyplot as plt
 from collections import Counter
 #from util import open_pickle as op
-ins = np.load('datasets/ins_2011_qc.npy')  # load full ins
-mesh = ins[:, -1, :, :]  # grab input mesh only
-outs = np.load('datasets/outs_2011_qc.npy')
+#ins = np.load('datasets/ins_2011_qc.npy')  # load full ins
+#mesh = ins[:, -1, :, :]  # grab input mesh only
+#outs = np.load('datasets/outs_2011_qc.npy')
 
+def get_proportions(outs):
+    # given proportions, alter a dataset to conform to these proportions
+    maxes = [x.max() for x in outs]
+    return maxes
 
 def get_pixel_list(outs, thres=20, ID='most_recent'):
     # returns the number of pixels above threshold for each image, as a list
@@ -41,19 +45,15 @@ def build_dataset(ins,outs,n):
 
 def rank_images(images, threshold):
     # 
-    ret_images = []
-    indices = np.arange(0,len(images),1)
-    count_list = []
+    ret_images = [] # array to hold return images
+    indices = np.arange(0,len(images),1) # indices
+    count_list = []      
     for image in images:
         image = np.where(image<threshold,0,image)
         count = np.count_nonzero(image)
-        print("count",count)
         count_list.append(count)
-   # print("original count_list",count_list[:300])
-  #  print("sorted count_list", sorted(count_list)[:300])
     ret_arr = [x for _, x in sorted(zip(count_list, indices))]
- #   print('return_array',ret_arr[:300])
-    return ret_arr[::-1]
+    return ret_arr[::-1] # reverse it while keeping list (reverse(list) returns not-list
 
 def get_probability(image,outs_shave):
     # given an image, determine the probability of removal
@@ -69,11 +69,6 @@ def get_probability(image,outs_shave):
         image = np.where(image>10,0,image)
         top = abs(np.mean(shave_image)-np.mean(image))
         bottom = max(np.mean(shave_image),np.mean(image))
-#        p = p + p_max*(top/bottom)
- #   print(p)
-#        p += p_max*(abs(np.mean(shave_image)-np.mean(image)))/(max(np.mean(shave_image),np.mean(image)))
-#         from scipy.stats import ks_2samp
-#         ks_2samp(shave_image, image)
     return None   
 
 def new_dataset(ins_prev,outs_prev,ins_standard,outs_standard,ID='most_recent'):
@@ -121,7 +116,7 @@ def new_dataset(ins_prev,outs_prev,ins_standard,outs_standard,ID='most_recent'):
         new_outs.append(outs_prev[idx,:,:,:])
     new_ins = np.asarray(new_ins)
     new_outs = np.asarray(new_outs)
-    np.save('datasets/ins_2011_{}.npy'.format(ID),new_ins)
+    np.save('datasets/ins_year_{}.npy'.format(ID),new_ins)
     np.save('datasets/outs_2011_{}.npy'.format(ID),new_outs)
     return new_ins, new_outs
  
@@ -160,13 +155,21 @@ def main():
     #plot_hist(n_list1, threshold, '2011_qc')
     Counter_2011 = proportions(n_list1)
     '''
-    ins = np.load('datasets/ins_2011_qc.npy')
-    outs = np.load('datasets/outs_2011_qc.npy')
+    year = '2011'
+    ins = np.load('datasets/ins_{}.npy'.format(year))
+    outs = np.load('datasets/outs_{}.npy'.format(year))
     new_ins = []
     new_outs = []
-    ranks = rank_images(outs,40)
+    threshold=20
+    ranks = rank_images(outs,threshold=threshold)
+    plt.hist(ranks)
+    plt.savefig('ranks.png')
     total = len(ranks) # total number of samples
-    proportion = 0.5 # proportion to keep
+    
+    proportion = 0.80 # proportion to keep]
+
+    # write code to randomize the ordering of images with same count
+
     length = int(total*proportion)
     for idx, ex in enumerate(ranks[:length]):
         new_ins.append(ins[int(ex),:,:,:])
@@ -174,8 +177,8 @@ def main():
     new_ins = np.asarray(new_ins)
     new_outs = np.asarray(new_outs)    
     proportion=int(proportion*100) # get out of decimal
-    np.save('datasets/ins_20ll_{}'.format(proportion),new_ins)
-    np.save('datasets/outs_2011_{}'.format(proportion),new_outs)
+    np.save('datasets/ins_{}_{}_{}'.format(year, proportion, threshold),new_ins)
+    np.save('datasets/outs_{}_{}_{}'.format(year, proportion, threshold),new_outs)
    # ins_shave = np.load('datasets/ins_raw.npy')
    # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
