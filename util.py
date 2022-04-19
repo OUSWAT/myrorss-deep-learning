@@ -333,7 +333,7 @@ def load_npy(prefix='outs'):
      @param prefix - string prefix of .npy files
     '''
     # load npy with prefix and return as single np array (or npy)
-    files = os.listdir('{}/{}'.format(HOME_HOME, 'datasets'))
+    files = os.listdir('{}/{}/prep'.format(HOME_HOME, 'datasets'))
     names = []
     for idx, f in enumerate(files[:-1]):  # collect all npys fname prefix
         if f[:2] == prefix[:2]:
@@ -374,10 +374,10 @@ def main():
     #ins, outs = load()
     #new_ins, new_outs = my_filter(ins,outs,max_val=40,min_pixels=50,ID='2011_thres_40')
     # print(new_ins.shape,new_outs.shape)
-    r = op('results/mse_shave_results.pkl')
-    scaler = op('scalers/scaler_outs_shave.pkl')
-    print(stats.stats(r, scaler))
-
+    data = load_npy(prefix='outs')
+    np.save('datasets/outs_20220419.npy',outs)
+    data = load_npy(prefix='ins')
+    np.save('datasets/ins_20220419.npy',ins)
 
 if __name__ == "__main__":
     main()

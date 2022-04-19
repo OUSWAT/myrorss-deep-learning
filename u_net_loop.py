@@ -161,3 +161,11 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
 
     # model.compile(loss=custom,optimizer=opt,metrics=['mse'])
     return model
+
+def create_UNetPlusPlus():
+    # TBD
+    pass
+
+def my_POD_loss(y_true, y_pred):
+    # TBD
+    pass
