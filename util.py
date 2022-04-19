@@ -333,13 +333,11 @@ def load_npy(prefix='outs'):
      @param prefix - string prefix of .npy files
     '''
     # load npy with prefix and return as single np array (or npy)
-    files = os.listdir('{}/{}/prep'.format(HOME_HOME, 'datasets'))
+    files = glob.glob('{}/datasets/prep/{}*npy'.format(HOME_HOME, prefix))
     names = []
-    for idx, f in enumerate(files[:-1]):  # collect all npys fname prefix
-        if f[:2] == prefix[:2]:
-            names.append(f)
+    
     # data is a list containing each npy
-    data = [np.load('{}/datasets/{}'.format(HOME_HOME, x)) for x in names]
+    data = [np.load('{}'.format(x)) for x in files]
     # correct :the shape check
     for idx, d in enumerate(data):
         if d.shape[1:3] != (60, 60):
@@ -348,8 +346,7 @@ def load_npy(prefix='outs'):
     # connect npys in a single npy
     data = np.concatenate(data, axis=0)
     return data
-
-
+    
 def remove_missing(year='2011'):
     # simple function to remove storms that are missing
     days = get_days(year)  # retrieve days in training_data
@@ -358,7 +355,6 @@ def remove_missing(year='2011'):
         missing_df_path = '{}/{}/{}/missingness.csv'.format(
             TRAINING_HOME, day[:4], day)
         missing_df = pd.read_csv(missing_df_path)
-        print(missing_df)
 
         for idx, row in missing_df.iterrows():
             stormID = row['storm']
@@ -369,15 +365,14 @@ def remove_missing(year='2011'):
                 print(' rm -r {}/{}/{}/{}'.format(TRAINING_HOME,
                       day[:4], day, stormID))
 
-
 def main():
     #ins, outs = load()
     #new_ins, new_outs = my_filter(ins,outs,max_val=40,min_pixels=50,ID='2011_thres_40')
     # print(new_ins.shape,new_outs.shape)
     data = load_npy(prefix='outs')
-    np.save('datasets/outs_20220419.npy',outs)
+    np.save('datasets/outs_20220419.npy',data)
     data = load_npy(prefix='ins')
-    np.save('datasets/ins_20220419.npy',ins)
+    np.save('datasets/ins_20220419.npy',data)
 
 if __name__ == "__main__":
     main()
