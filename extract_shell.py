@@ -1,4 +1,5 @@
 # Author: Michael Montalbano
+# Title: extract_shell.py
 #
 # Purpose: Extract data fields from tars
 # to compose database of netcdfs organized  by date
@@ -494,7 +495,8 @@ def check_MESH(storms_df, day, OUTPATH):
         var = nc.variables['MESH_Max_30min'][:, :]
         var = np.where(var < -50, 0, var)
        # Decide whether it meets the conditions
-        keep = decide(var)
+        #keep = decide(var)
+        keep = True # keep everything
         # wipe dir
         cmd = 'rm {}/*'.format(MESH_dir)
         p = sp.Popen(cmd, shell=True)
