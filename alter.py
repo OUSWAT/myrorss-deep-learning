@@ -9,44 +9,51 @@ import util, random
 import sys, stats
 import matplotlib.pyplot as plt
 from collections import Counter
-#from util import open_pickle as op
-#ins = np.load('datasets/ins_2011_qc.npy')  # load full ins
-#mesh = ins[:, -1, :, :]  # grab input mesh only
-#outs = np.load('datasets/outs_2011_qc.npy')
+'''
+Sample method for deleting elements of a dataset:
+bin_indices, ratios, shave_ratios = my_hist(outs_shave, outs_2008)
+print(ratios,shave_ratios) # pick group with very different proportion
+
+outs = delete_some(outs_2008,bindices, index=1,percent=10)
+# Repeat until satisfactory 
+'''
 
 def get_hist(outs):
     # given proportions, alter a dataset to conform to these proportions
     maxes = [x.max() for x in outs]
     bins = [0,15,30,45,65,100] # np.arange(0,100,15)
     hist, edges = np.histogram(maxes,bins)
-    return hist, bin_inds
+    bin_ind = np.digitize(maxes,bins)    
+    return hist, bin_ind
 
-def make_more_like_outs(outs,ins1,outs1):
+def my_hist(outs,outs1):
+    # @param outs - dataset to become more like
+    # @param outs1 - dataset to alter
+    # @param index - group to delete from
     # given a dataset outs, remove samples so that its distribution 
     # is more like SHAVE (outs_raw.npy)
-    hist = get_hist(outs) # get hist for outs
+    hist, edges = get_hist(outs) # get hist for outs
     n = len(outs)
     proportions = [x/n for x in hist]
     hist1, bin_indices = get_hist(outs1)
     n1 = len(outs1)
     ratios = [x/n1 for x in hist1]
-    
-    # brute force
-    for idx, p in enumerate(proportions):
-        if p > ratios[idx]:
-            pass
-        else:
-            while p > ratios[idx]:
-                # cycle through list
-                # use bin indices to remove samples
-                # remove N samples at a time
-                # recompute proportions
-                pass   
- 
-    # METHOD
-    # loop through outs
-    # if the proportion for a category is off from SHAVE, remove samples randomly from other categories
-    pass
+    max_index = np.argmax(ratios)
+#    delete_some(var,indices,percent=10)
+#    mask = np.where(bin_indices == max_index, 1, 0) # set all 0, but 1 if max_index = group
+    return bin_indices, ratios, proportions
+
+def delete_some(var,index,bindices,percent=10):
+    # var - 4D np array
+    # index - int index of group to remove from
+    # bindices - bin_indices from my-hist()
+    # percent - percent of group to remove
+    indices = np.where(bindices == index) # get indices of index
+    del_ind = np.random.choice(bindices, size=int(len(bindices)/percent)) # delete 10 percent
+    del_ind = np.flip(np.sort(del_ind)) # sort so that elements dont change order as they priors are deleted
+    for ind in del_ind:
+        var = np.delete(var,ind,0) # delete ind element along axis 0 (whole thing)
+    return var
 
 def get_pixel_list(outs, thres=20, ID='most_recent'):
     # returns the number of pixels above threshold for each image, as a list
@@ -204,32 +211,9 @@ def main():
     print('2006 {}'.format(h06))
     #print('2008 {}'.format(h08))
     print('2011 {}'.format(h11)) 
-    
-'''
-    new_ins = []
-    new_outs = []
-    threshold=20
-    ranks = rank_images(outs,threshold=threshold)
-    plt.hist(ranks)
-    plt.savefig('ranks.png')
-    total = len(ranks) # total number of samples
-    
-    proportion = 0.80 # proportion to keep]
-
-    # write code to randomize the ordering of images with same count
-
-    length = int(total*proportion)
-    for idx, ex in enumerate(ranks[:length]):
-        new_ins.append(ins[int(ex),:,:,:])
-        new_outs.append(outs[int(ex),:,:,:])
-    new_ins = np.asarray(new_ins)
-    new_outs = np.asarray(new_outs)    
-    proportion=int(proportion*100) # get out of decimal
-    np.save('datasets/ins_{}_{}_{}'.format(year, proportion, threshold),new_ins)
-    np.save('datasets/outs_{}_{}_{}'.format(year, proportion, threshold),new_outs)
    # ins_shave = np.load('datasets/ins_raw.npy')
    # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
-'''
+
 if __name__ == "__main__":
     main()
