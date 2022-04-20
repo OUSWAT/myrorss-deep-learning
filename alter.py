@@ -39,22 +39,39 @@ def my_hist(outs,outs1):
     n1 = len(outs1)
     ratios = [x/n1 for x in hist1]
     max_index = np.argmax(ratios)
+    print('Desired ratios: {}'.format(proportions))
+    print('Dataset ratios: {}'.format(ratios))
 #    delete_some(var,indices,percent=10)
 #    mask = np.where(bin_indices == max_index, 1, 0) # set all 0, but 1 if max_index = group
-    return bin_indices, ratios, proportions
+    return bin_indices
 
-def delete_some(var,index,bindices,percent=10):
+def delete_images(var,bindices,index,percent=10):
+    '''
+    Needs troubleshooting
     # var - 4D np array
     # index - int index of group to remove from
     # bindices - bin_indices from my-hist()
     # percent - percent of group to remove
-    indices = np.where(bindices == index) # get indices of index
-    del_ind = np.random.choice(bindices, size=int(len(bindices)/percent)) # delete 10 percent
+    '''
+    indices_tuple = np.where(bindices == index) # get indices of index
+    indices = list(indices_tuple[0]) # np where returnss a tuple for some reason
+    del_ind = np.random.choice(indices, size=int(len(bindices)/percent)) # delete 10 percent
     del_ind = np.flip(np.sort(del_ind)) # sort so that elements dont change order as they priors are deleted
     for ind in del_ind:
         var = np.delete(var,ind,0) # delete ind element along axis 0 (whole thing)
     return var
 
+def add_images(ind,outs_to_take_from,ins_to_take_from,ins,outs,N):
+    indices_tuple = np.where(bindices == index) # get indices of index
+    indices = list(indices_tuple[0]) # np where returnss a tuple for some reason
+    indices = np.random.choice(indices, size=N)
+    for ind in indices:
+        image = outs_to_take_from[ind]
+        outs = np.concatenate((outs, image))
+        images = ins_to_take_from[ind]
+        ins = np.concatenate((ins, images))
+    return ins, outs
+    
 def get_pixel_list(outs, thres=20, ID='most_recent'):
     # returns the number of pixels above threshold for each image, as a list
     n_list = []
@@ -192,25 +209,13 @@ def main():
     #plot_hist(n_list1, threshold, '2011_qc')
     Counter_2011 = proportions(n_list1)
     '''
-    year = '2011'
-   # ins = np.load('datasets/ins_{}.npy'.format(year))
-    outs11 = np.load('datasets/outs_2011.npy') 
-    year = '2005'
-    outs05 = np.load('datasets/outs_2005.npy')
     year = '2006'
     outs06 = np.load('datasets/outs_2006.npy')
-    #year = '2008'
-    #outs08 = np.load('datasets/outs_2009.npy')
-    h05 = get_hist(outs05)
-    h06 = get_hist(outs06)
-    #h08 = get_hist(outs08)
-    h11 = get_hist(outs11)
-    print('bins')
-    print(bins)
-    print('2005 {}'.format(h05))
-    print('2006 {}'.format(h06))
-    #print('2008 {}'.format(h08))
-    print('2011 {}'.format(h11)) 
+    shave = np.load('datasets/outs_raw.npy')
+    ins06 = np.load('datasets/ins_2006.npy')
+    bindices = my_hist(shave,outs06)
+    test_outs = delete_some(outs06,1,bindices,30)
+    bindices = my_hist(shave, test_outs)
    # ins_shave = np.load('datasets/ins_raw.npy')
    # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
