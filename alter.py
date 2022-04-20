@@ -1,7 +1,8 @@
 #
 # Author: Michael Montalbano
-# Purpose: Maniputate datasets to form new datasets
-# title: 
+# Purpose: Alter datasets to form 'new' datasets (subsets with different statistics)
+# title: alter.py
+
 import numpy as np
 import pandas as pd
 import util, random
@@ -18,7 +19,34 @@ def get_hist(outs):
     maxes = [x.max() for x in outs]
     bins = [0,15,30,45,65,100] # np.arange(0,100,15)
     hist, edges = np.histogram(maxes,bins)
-    return hist
+    return hist, bin_inds
+
+def make_more_like_outs(outs,ins1,outs1):
+    # given a dataset outs, remove samples so that its distribution 
+    # is more like SHAVE (outs_raw.npy)
+    hist = get_hist(outs) # get hist for outs
+    n = len(outs)
+    proportions = [x/n for x in hist]
+    hist1, bin_indices = get_hist(outs1)
+    n1 = len(outs1)
+    ratios = [x/n1 for x in hist1]
+    
+    # brute force
+    for idx, p in enumerate(proportions):
+        if p > ratios[idx]:
+            pass
+        else:
+            while p > ratios[idx]:
+                # cycle through list
+                # use bin indices to remove samples
+                # remove N samples at a time
+                # recompute proportions
+                pass   
+ 
+    # METHOD
+    # loop through outs
+    # if the proportion for a category is off from SHAVE, remove samples randomly from other categories
+    pass
 
 def get_pixel_list(outs, thres=20, ID='most_recent'):
     # returns the number of pixels above threshold for each image, as a list
@@ -158,8 +186,26 @@ def main():
     Counter_2011 = proportions(n_list1)
     '''
     year = '2011'
-    ins = np.load('datasets/ins_{}.npy'.format(year))
-    outs = np.load('datasets/outs_{}.npy'.format(year))
+   # ins = np.load('datasets/ins_{}.npy'.format(year))
+    outs11 = np.load('datasets/outs_2011.npy') 
+    year = '2005'
+    outs05 = np.load('datasets/outs_2005.npy')
+    year = '2006'
+    outs06 = np.load('datasets/outs_2006.npy')
+    #year = '2008'
+    #outs08 = np.load('datasets/outs_2009.npy')
+    h05 = get_hist(outs05)
+    h06 = get_hist(outs06)
+    #h08 = get_hist(outs08)
+    h11 = get_hist(outs11)
+    print('bins')
+    print(bins)
+    print('2005 {}'.format(h05))
+    print('2006 {}'.format(h06))
+    #print('2008 {}'.format(h08))
+    print('2011 {}'.format(h11)) 
+    
+'''
     new_ins = []
     new_outs = []
     threshold=20
@@ -184,6 +230,6 @@ def main():
    # ins_shave = np.load('datasets/ins_raw.npy')
    # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
-
+'''
 if __name__ == "__main__":
     main()
