@@ -45,7 +45,7 @@ def my_hist(outs,outs1):
 #    mask = np.where(bin_indices == max_index, 1, 0) # set all 0, but 1 if max_index = group
     return bin_indices
 
-def delete_images(var,bindices,index,percent=10):
+def delete_images(var,bindices,index,N=10):
     '''
     Needs troubleshooting
     # var - 4D np array
@@ -56,19 +56,23 @@ def delete_images(var,bindices,index,percent=10):
     indices_tuple = np.where(bindices == index) # get indices of index
     indices = list(indices_tuple[0]) # np where returnss a tuple for some reason
     del_ind = np.random.choice(indices, size=int(len(bindices)/percent)) # delete 10 percent
-    del_ind = np.flip(np.sort(del_ind)) # sort so that elements dont change order as they priors are deleted
+    del_ind = np.flip(np.sort(del_ind)) # sort and flip to reverse order for deletion
     for ind in del_ind:
         var = np.delete(var,ind,0) # delete ind element along axis 0 (whole thing)
     return var
 
-def add_images(ind,outs_to_take_from,ins_to_take_from,ins,outs,N):
-    indices_tuple = np.where(bindices == index) # get indices of index
+def add_images(ind, ins_to_take_from, outs_to_take_from, ins, outs, N, index = 1):
+    indices_tuple = np.where(ind == index) # get indices of index
     indices = list(indices_tuple[0]) # np where returnss a tuple for some reason
     indices = np.random.choice(indices, size=N)
+    i = 0
     for ind in indices:
+        print(ind, i)
+        i+=1
         image = outs_to_take_from[ind]
+        image = np.expand_dims(image,0) # keep outs and image same shape 
         outs = np.concatenate((outs, image))
-        images = ins_to_take_from[ind]
+        images = np.expand_dims(ins_to_take_from[ind], 0)          
         ins = np.concatenate((ins, images))
     return ins, outs
     
@@ -125,55 +129,6 @@ def get_probability(image,outs_shave):
         bottom = max(np.mean(shave_image),np.mean(image))
     return None   
 
-def new_dataset(ins_prev,outs_prev,ins_standard,outs_standard,ID='most_recent'):
-    # Make two datasets similar by removing images semi-randomly based on image quantiles
-    '''
-    quants1 = np.zeros((6))
-    quants2 = np.zeros((6))
-    for idx, MESH in enumerate(outs1):
-        quants = stats.get_quantiles(MESH)
-        print(quants)
-        quants1 = np.mean(np.array([quants,quants1])) # add then take mean, iteratively
-    for idx, MESH in enumerate(outs2):
-        quants = stats.get_quantiles(MESH)
-        quants2 = np.mean(np.array([quants,quants2])) # add, then mean
-    print(quants1) # display quants
-    print(quants2)
-    new_ins = []
-    new_outs = []
-    indices = []
-    # check outs1 to build returning nwe outs and ins
-    for idx, MESH in enumerate(outs_prev):
-        quants = stats.get_quantiles(MESH)
-        diff = quants1 > quants # return boolean list
-        p = .1*(np.count_nonzero(diff==True)) # for each True in list, increase p by 0.1
-        if random.uniform(0,1) > p: # if greater than p, then keep sample
-            indices.append(idx)     # record keep_index
-    for idx in indices:
-        new_ins.append(ins1[idx,:,:,:])
-        new_outs.append(outs1[idx,:,:,:])
-    new_ins = np.asarray(new_ins)
-    new_outs = np.asarray(new_outs)
-    np.save('datasets/ins_2011_a.npy',new_ins)
-    np.save('datasets/outs_2011_a.npy',new_outs)
-    '''
-    new_ins = []
-    new_outs = []
-    indices = []
-    # check outs1 to build returning nwe outs and ins
-    for idx, image in enumerate(outs_prev):
-        p = get_probability(image, outs_standard) # can't we just have outs_shave already asssigned? 
-        if random.uniform(0,1) > p: # if greater than p, then keep sample 
-            indices.append(idx)     # record keep_index
-    for idx in indices:
-        new_ins.append(ins_prev[idx,:,:,:]) 
-        new_outs.append(outs_prev[idx,:,:,:])
-    new_ins = np.asarray(new_ins)
-    new_outs = np.asarray(new_outs)
-    np.save('datasets/ins_year_{}.npy'.format(ID),new_ins)
-    np.save('datasets/outs_2011_{}.npy'.format(ID),new_outs)
-    return new_ins, new_outs
- 
 def get_maxes():
     '''
     I need a function to basically get cat=whisker plots of each images MESH values 
@@ -200,22 +155,22 @@ def plot_hist(numbers, threshold, ID='most_recent'):
     return None
 
 def main():
-    '''
-    threshold = 20  # use 25 MM threshold
-    n_list1 = get_pixel_list(outs, threshold, '2011')
-    outs2 = np.load('datasets/outs_shave.npy')
-    # get the list of pixels above threshold for each image in outs)
-    n_list2 = get_pixel_list(outs2, threshold, 'raw')
-    #plot_hist(n_list1, threshold, '2011_qc')
-    Counter_2011 = proportions(n_list1)
-    '''
-    year = '2006'
-    outs06 = np.load('datasets/outs_2006.npy')
-    shave = np.load('datasets/outs_raw.npy')
+   
+   # shave = np.load('datasets/outs_raw.npy')
     ins06 = np.load('datasets/ins_2006.npy')
-    bindices = my_hist(shave,outs06)
-    test_outs = delete_some(outs06,1,bindices,30)
-    bindices = my_hist(shave, test_outs)
+    outs06 = np.load('datasets/outs_2006.npy')
+    ins08 = np.load('datasets/ins_2008.npy')
+    outs08 = np.load('datasets/outs_2008.npy')
+
+    hist, ind06 = get_hist(outs06)
+    print('hist06 (before) {}'.format(hist))
+    hist, ind08 = get_hist(outs08)
+    print(outs06.shape)
+    ins, outs = add_images(ind08, ins08, outs08, ins06, outs06, N=1800, index=1)
+    print(outs.shape)
+    np.save('ins06.npy', ins)
+    np.save('outs06.npy', outs)
+
    # ins_shave = np.load('datasets/ins_raw.npy')
    # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')

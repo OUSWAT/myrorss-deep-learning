@@ -48,9 +48,27 @@ TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
 
-def stats(r, scaler):
+def mse_binned(r):
+    y_true = r['true_testing']
+    y_pred = r['predict_testing']
+
+    sectors = [(0,10),(10,20),(20,30),(30,40),(40,50),(50,70)] # MESH bins
+    image_loss = []
+    for idx, image in enumerate(y_true):
+        sector_loss = []
+        for s in sectors:
+            # make mask
+            l = s[0] # upper bound
+            u = s[1] # lower bound
+            y_true = np.where(l<y_true<u,0,y_true) # mask
+            y_pred = np.where(l<y_pred<u,0,y_pred) # mask
+            sector_loss.append(np.sqrt(np.mean((y_pred-y_true)**2))) #append rmse
+        image_loss.append(sector_loss)
+    return image_loss # returns an array of arrays.
+        
+def stats(r, threshold=20):
     # return metrics for finding POD, FAR, CSI, etc (Roebber 2008)
-    container = binary_accuracy(r, scaler)
+    container = binary_accuracy(r, threshold)
     correct, total, TP, FP, TN, FN, events = [x for x in container]
     POD = TP / (TP + FN)
     FAR = FP / (TP + FP)  # SR = 1 - FAR
@@ -64,7 +82,7 @@ def get_quantiles(image):
     q = np.quantile(image,[0.25,0.5,0.75,0.9,0.95,1])
     return q
     
-def binary_accuracy(r, scaler):
+def binary_accuracy(r, threshold):
     # return metrics for finding POD, FAR, CSI, etc
     y_true = r['true_testing']
     y_pred = r['predict_testing']
@@ -78,16 +96,17 @@ def binary_accuracy(r, scaler):
     FN = 0
     events = 0
     for idx, ex in enumerate(y_true):
-        ex = ex.reshape(1, 60 * 60)
-        ex_pred = y_pred[idx].reshape(1, 60 * 60)
-        ex = scaler.inverse_transform(ex)
-        ex_pred = scaler.inverse_transform(ex_pred)
-
+        # Don't scale, just keep y_true and y_pred unchanged
+       # ex = ex.reshape(1, 60 * 60)
+        #ex_pred = y_pred[idx].reshape(1, 60 * 60)
+       # ex = scaler.inverse_transform(ex)
+       # ex_pred = scaler.inverse_transform(ex_pred)
+        
         # Count Area Shared Above threshold (20 mm)
         thres = 20
 
         # binarize the data
-        ex_pred = np.where(ex_pred < 20, 0, 1)
+        ex_pred = np.where(y_pred[idx] < 20, 0, 1)
         ex = np.where(ex < 20, 0, 1)
 
         # Compute positives, negatives, etc
@@ -215,10 +234,15 @@ def check_storm(storm_path):
 
 
 def main():
-#    scaler = util.open_pickle('scaler_outs_2011_qc.pkl','scalers')
-#    scaler_raw = util.open_pickle('scaler_outs_raw.pkl','scalers')
-#    print('POD, FAR, bias, CSI')
-    ins1 = np.load('datasets/ins_2011_qc.npy')
+     # comment this out when you want to predict on shave
+#    y_true = np.load('datasets/outs_raw.npy')
+#    ins = np.load('datasets/ins_raw.npy')
+#    y_pred = model.predict(ins)
+    
+    r = util.open_pickle('results/2008_64a128_filters_100e_20b_Nonel2_10s_results.pkl')
+    image_loss = mse_binned(r)
+    print(image_loss)
+'''
     outs1 = np.load('datasets/outs_2011.npy')
     ins2 = np.load('datasets/ins_raw.npy')
     outs2 = np.load('datasets/outs_raw.npy')
@@ -237,7 +261,7 @@ def main():
     indices = []
     new_ins=[]
     new_outs=[]
-'''    for idx, MESH in enumerate(outs1):
+    for idx, MESH in enumerate(outs1):
         quants = get_quantiles(MESH)
         diff = quants1 > quants
         p = .1*(np.count_nonzero(diff==True))

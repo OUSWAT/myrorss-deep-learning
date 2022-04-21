@@ -11,7 +11,7 @@ from collections import Counter
 import datetime
 import matplotlib.pyplot as plt
 from numpy.random import default_rng
-rng = default_rng()
+#rng = default_rng()
 multi_fields = [
     'MergedLLShear_Max_30min',
     'MergedLLShear_Min_30min',
@@ -69,39 +69,26 @@ degrees = [
     '20.00']
 features = products + degrees
 
-
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 
-'''
-Start-up example:
-import util
-util.clear()
-ins, outs = util.load()
-new_ins, new_outs = util.filter(ins,outs,max_val=40,ID='2011_thres_40'
-'''
-
-
 def unnamed_function1():
-    # useful for comparing datasets, use to compare and filter 2011_qc/SHAVE
+    # no-name
     for idx, n in enumerate(nlist2):
         if int(n) > 2000:
             sort2.append(int(n))
         if int(nlist1[idx]) > 2000:
             sort1.append(int(nlist1[idx]))
 
-
 def clear():
     # clear screen
     os.system('clear')
-
 
 def load():
     # return ins, outs
     return np.load(
         'datasets/ins_2011_qc.npy'), np.load('datasets/outs_2011_qc.npy')
-
 
 def compare_maxes(ins, outs, intersect0, intersect1):
     # Assume that input MESH is ins[,,,-1]
@@ -111,6 +98,8 @@ def compare_maxes(ins, outs, intersect0, intersect1):
         print(val.max(), y[idx].max())
     return
 
+def load(name='outs_2006'):
+    return np.load('datasets/{}.npy'.format(name))
 
 def my_filter(ins, outs, max_val=30, min_pixels=50, ID=None):
     # given max_val, filter out ins and outs for only those where

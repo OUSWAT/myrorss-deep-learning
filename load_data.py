@@ -30,7 +30,7 @@ multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShe
 swath_fields = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MergedReflectivityQCComposite_Max_30min','MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
 degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
-
+acceptable_months = ['03','04','05','06','07','08']
 targets = ['target_MESH_Max_30min']
 products = multi_fields  + targets
 field_list =  swath_fields
@@ -70,6 +70,10 @@ def load_data_from_df(df):
    
     # now we iterate through each row in the dataframe 
     for idx, row in df.iterrows():
+        date = row['date']
+        month = date[4:6]
+        if month not in acceptable_dates:
+            break
         n = int(row['features']) # get the number of features
         storm = row['storm_path']
         print(row['feature_list'])
@@ -177,7 +181,7 @@ def get_df_shapes(year='2011'):
     shape_list = []
     i=0
     days = get_cases(year)
-    df = pd.DataFrame(columns={'storm_path','features','feature_list'})
+    df = pd.DataFrame(columns={'date','storm_path','features','feature_list'})
     for idx, day in enumerate(days):
         year = day[:4]
         fields = []
@@ -186,13 +190,13 @@ def get_df_shapes(year='2011'):
             ins = []
             files = get_storm_files(storm)
             if files == []:
-                row = {'storm_path':storm, 'features':0, 'feature_list':[]}
+                row = {'date':day,'storm_path':storm, 'features':0, 'feature_list':[]}
                 df.loc[i] = row
                 i+=1
                 continue
             for f_name in files:
                 fields.append(f_name.split('/')[3])
-            row = {'storm_path':storm,'features':len(files),'feature_list':files,'fields':fields}
+            row = {'date':day,'storm_path':storm,'features':len(files),'feature_list':files,'fields':fields}
             df.loc[i] = row
             i+=1
     df.to_csv('{}/csv/{}_missing_fields.csv'.format(home,year))
@@ -257,21 +261,63 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
+    year = '2008'
+    df = get_df_shapes(year)
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    year = '2005'
+    df = get_df_shapes(year)
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    year = '2006'
+    df = get_df_shapes(year)
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+    year = '2007'
+    df = get_df_shapes(year)
+    df.to_csv('csv/{}_missing_fields.csv'.format(year))
     year = '2011'
     df = get_df_shapes(year)
     df.to_csv('csv/{}_missing_fields.csv'.format(year))
-  # df = pd.read_csv('csv/2011_missing_fields.csv')
-    #df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
+
+    year = '2006'
+    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
     ins, outs = load_data_from_df(df)   
-   
     ins = np.asarray(ins)
     outs = np.asarray(outs)
     ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
     outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-
     np.save('datasets/ins_{}.npy'.format(year),ins)
     np.save('datasets/outs_{}.npy'.format(year),outs)
-        
+
+    year = '2007'
+    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
+    ins, outs = load_data_from_df(df)
+    ins = np.asarray(ins)
+    outs = np.asarray(outs)
+    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+    np.save('datasets/ins_{}.npy'.format(year),ins)
+    np.save('datasets/outs_{}.npy'.format(year),outs)
+
+    year = '2011'
+    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
+    ins, outs = load_data_from_df(df)
+    ins = np.asarray(ins)
+    outs = np.asarray(outs)
+    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+    np.save('datasets/ins_{}.npy'.format(year),ins)
+    np.save('datasets/outs_{}.npy'.format(year),outs)
+
+    year = '2005'
+    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
+    ins, outs = load_data_from_df(df)
+    ins = np.asarray(ins)
+    outs = np.asarray(outs)
+    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
+    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
+    np.save('datasets/ins_{}.npy'.format(year),ins)
+    np.save('datasets/outs_{}.npy'.format(year),outs)
+
+ 
 #    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
 #    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 #    np.save('datasets/reshaped_ins_2011.npy',ins)
