@@ -23,23 +23,22 @@ st.write("""
 Compare MESH images.
 """)
 
-loss_functions = ['mse', 'mae']
+#loss_functions = ['mse', 'mae']
 
-loss = st.radio("Pick a loss function", loss_functions)
+#loss = st.radio("Pick a loss function", loss_functions)
 
 #if loss == 'mse':
 #    y_pred = load('data/y_pred_mse_app.npy')
 #else:
 #    y_pred = load('data/y_pred_{}_app.npy'.format(loss))
-y_1 = load('toy_datasets/MESH_subset_2011.npy')
-y_2 = load('toy_datasets/MESH_subset_shave.npy'
+ins = load('toy_datasets/ins_2011_subset.npy')
+outs = load('toy_datasets/outs_2011_subset.npy'
+number = st.number_input("Pick a sample number (0-100)",0,100)
+X = index_of_in
+var1= np.squeeze(outs[number])
+y_2 = np.squeeze(ins[number,:,:,X])
 
-number = st.number_input("Pick a sample number (0-939)",0,939)
-
-y_1 = np.squeeze(y_1[number])
-y_2 = np.squeeze(y_2[number])
-
-f, axs = plt.subplots(1,2,figsize=(16,8))
+f, axs = plt.subplots(3,2,figsize=(16,8))
 
 plt.subplot(121)
 ax = plt.gca()
