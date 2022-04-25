@@ -23,7 +23,7 @@ import datetime
 from sklearn.preprocessing import StandardScaler
 #from stats import *
 import tensorflow.keras.backend as K
-from unet import create_uNet
+#from unet import create_uNet
 import stats
 K.set_image_data_format('channels_last')
 
@@ -39,7 +39,7 @@ def create_parser():
     parser.add_argument(
         '-ID',
         type=str,
-        default='2011_80',
+        default='2008_2',
         help='ID of dataset')
     parser.add_argument(
         '-exp_type',
@@ -54,7 +54,7 @@ def create_parser():
     parser.add_argument(
         '-dropout',
         type=float,
-        default=None,
+        default=0.1,
         help='Enter the dropout rate (0<p<1)')
     parser.add_argument(
         '-lambda_regularization',
@@ -64,19 +64,21 @@ def create_parser():
     parser.add_argument(
         '-epochs',
         type=int,
-        default=300,
+        default=100,
         help='Training epochs')
     parser.add_argument(
         '-steps',
         type=int,
-        default=2,
+        default=10,
         help='Steps per epoch')
     parser.add_argument(
         '-filters',
         type=int,
         default=[
-            64,
-            128],
+            12,
+            12,
+            12
+            ],
         help='Enter the number of filters for convolutional network')
     parser.add_argument(
         '-unet_type',
@@ -181,7 +183,7 @@ def transform(var):
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
 
-    for i in range(n_channels):
+    for i in range(n_channels-1): # don't tranform Input MESH
         mmx = StandardScaler()
         # make it a bunch of row vectors
         slc = var[:, :, :, i].reshape(var.shape[0], 60 * 60)
@@ -192,23 +194,6 @@ def transform(var):
         tdata_transformed[:, :, :, i] = transformed
         channel_scalers.append(mmx)  # store the transform
     return tdata_transformed, channel_scalers
-
-
-def transform_test(var, scalers):
-    n_channels = var.shape[3]
-    tdata_transformed = np.zeros_like(var)
-    channel_scalers = []
-    for i in range(n_channels):
-        mmx = StandardScaler()
-        slc = var[:, :, :, i].reshape(var.shape[0], 60 * 60)
-        transformed = mmx.fit_transform(slc)
-        transformed = transformed.reshape(
-            var.shape[0], 60, 60)  # reshape it back to tiles
-        # put it in the transformed array
-        tdata_transformed[:, :, :, i] = transformed
-        channel_scalers.append(mmx)
-    return tdata_transformed, channel_scalers
-
 
 def training_set_generator_images(ins, outs, batch_size=10,
                                   input_name='input',
@@ -234,7 +219,6 @@ def training_set_generator_images(ins, outs, batch_size=10,
 
 # Standard MSE loss function plus term penalizing only misses
 
-
 if(swatml):
     strategy = tf.distribute.MirroredStrategy()
     HOME_PATH = '/home/michaelm/'
@@ -250,14 +234,10 @@ elif(supercomputer):
 parser = create_parser()
 args = parser.parse_args()
 
-ID = '2011_qc'
-
 ins = np.load('datasets/ins_{}.npy'.format(args.ID))
-#ins = np.reshape(ins, (ins.shape[0], 60, 60, ins.shape[1]))
 outs = np.load('datasets/outs_{}.npy'.format(args.ID))
-#outs = np.reshape(outs, (outs.shape[0], 60, 60, outs.shape[1]))
-#outs = np.squeeze(outs)
 indices = np.asarray(range(ins.shape[0]))
+
 ins_train, ins_val, outs_train, outs_val = train_test_split(
     ins, outs, test_size=0.16, random_state=3)
 ins_train, ins_test, outs_train, outs_test = train_test_split(
@@ -269,13 +249,7 @@ ins_train, scalers = transform(ins_train)
 ins_val, scalers = transform(ins_val)
 #pickle.dump(scalers, open('scalers/scaler_{}.pkl'.format(args.ID), 'wb'))
 ins_test, scalers = transform(ins_test)
-outs_train, scalers = transform(outs_train)
-outs_val, scalers = transform(outs_val)
-outs_test, outs_test_scalers = transform_test(
-    outs_test, scalers)  # transform using standardscaler
-# save the transformation scaler for the true test set
-outs_scaler = outs_test_scalers[0]
-pickle.dump(outs_scaler, open('scalers/scaler_outs_{}.pkl'.format(args.ID), 'wb'))
+
 
 start = time.time()
 if swatml:
@@ -328,7 +302,7 @@ results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
 results['history'] = history.history
 
 # Save results
-fbase = r"results/{}_{}e_{}b_{}l2_{}s".format(args.ID, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
+fbase = r"results/{}_{}_{}e_{}b_{}l2_{}s".format(args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
 results['fname_base'] = fbase
 fp = open("%s_results.pkl" % (fbase), "wb")
 pickle.dump(results, fp)
@@ -340,12 +314,12 @@ end = time.time()
 print(fbase)
 print('time:',end-start)
 # Save statistical results in a database
-c = stats.stats(results, outs_scaler)
-POD = c[0]
-FAR = c[1]
-CSI = c[2]
+#c = stats.stats(results)
+#POD = c[0]
+#FAR = c[1]
+#CSI = #c[2]
 #hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
 #row = {'hyperparameters': fbase, 'POD': POD, 'FAR':FAR, 'CSI':CSI, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),'runtime':end-start}
 #hyperparameter_df.loc[len(hyperparameter_df.index)] = row
 # hyperparameter_df.to_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-print('POD {} FAR {} CSI {}'.format(POD, FAR, CSI))
+#print('POD {} FAR {} CSI {}'.format(POD, FAR, CSI))

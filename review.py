@@ -38,6 +38,9 @@ def quick_check(y_true, y_pred, scaler):
         yp = scaler.inverse_transform(yp)
         print(ex.max(), yp.max())
 
+def get_models():
+    return glob.glob('results/*model')
+
 def get_interesting_pickles():
     return glob.glob('results/interest/*.pkl')
 
@@ -48,7 +51,7 @@ def plot_interesting_pickles():
     for fname in pickles:
         r = util.open_pickle(fname)
         plotlib.plot_loss(r['history'],ID='{}_loss'.format(fname)) #plot the loss
-        plt.savefig('most_recent_{}.png'.format(fname.split('/')[-1]))   
+        plt.savefig('{}.png'.format(fname.split('/')[-1]))   
 
 
 def summarize(outs):
@@ -89,6 +92,9 @@ def percent_above(field, thres, min_pixels):
 
 def main():
     fname_list = get_interesting_pickles()
+    for fname in fname_list:
+        r = open_pickle(fname)
+        print(r.keys())        
  #   plot_interesting_pickles()
  #   scaler = util.op('scalers/scaler_outs_2011_80.pkl')
     for fname in fname_list:
@@ -98,6 +104,7 @@ def main():
             print(stats.stats(r,threshold=25))
         except: 
             print('divide by zero')
+    plot_interesting_pickles()
     # skip the intersting loop writing for later
     #fname = fname_list[0]
     #res = util.open_pickle(fname)

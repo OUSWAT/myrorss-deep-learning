@@ -17,6 +17,9 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
+#from helper_functions import mean_iou, dice_coef, dice_coef,loss, compute_iou
+binary=False
+mse=True
 
 print(tf.__version__)
 
@@ -47,9 +50,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
     tensor = BatchNormalization()(input_tensor)
     tensor = GaussianNoise(0.1)(tensor)
 
-    filters = [32, 64, 128]
-
-    # downsampling loop
+        # downsampling loop
     for idx, f in enumerate(filters[:-1]):
         print(tensor)
         tensor = Convolution2D(f,
@@ -155,12 +156,40 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
         amsgrad=False)
 
     model = Model(inputs=input_tensor, outputs=output_tensor)
+    if mse:
+        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
+                  metrics=tf.keras.metrics.RootMeanSquaredError())
 
-    model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                  metrics=[tf.keras.metrics.MeanSquaredError()])
+    if binary:
+        model.compile(tf.keras.losses.BinaryCrossentropy(), 
+                  metrics=tf.keras.metrics.TruePositives(thresholds=[0.3,0.5,0.7]),
+                  optimizer=opt)
 
     # model.compile(loss=custom,optimizer=opt,metrics=['mse'])
     return model
+
+
+def myMED(weight=0.0):
+    def loss(y_true, y_pred):
+        y_true_discrete = tf.cast(tf.round(y_true), tf.int32)
+        y_pred_discrete = tf.cast(tf.round(y_pred), tf.int32)
+        dist = tf.norm(y_true_discrete - y_pred_discrete, axis=-1) # axis = -1 means along the last dimension (channel)
+        dist = tf.cast(dist, tf.float32)
+        dist = tf.reduce_mean(dist)
+        return dist
+    return loss
+        # for mean error distance you need to 
+        # sum up the distance from each pixel in A to every non-zero pixel in B
+        # and then divide by the number of non-zero pixels in B
+        # this is the same as taking the mean of the distance
+        # but this is not the same as the mean of the distance
+        # because the distance is not a probability
+        # so you need to take the mean of the mean of the distance
+        # which is the same as taking the mean of the distance
+        # but this is not the same as the mean of the distance
+        # because the distance is not a probability
+        # so you need to take the mean of the mean of the distance
+
 
 def create_UNetPlusPlus():
     # TBD
@@ -169,3 +198,13 @@ def create_UNetPlusPlus():
 def my_POD_loss(y_true, y_pred):
     # TBD
     pass
+
+def soft_disc(y_true, y_pred):
+    # soft discretation cutoff, i.e. soft thresholding
+    # rather than convert to 0/1 in ins/outs, convert during training
+    c = 5
+    cutoff = 30
+    y_pred_binary_approx = tf.math.sigmoid(c * (y_pred - cutoff))
+    return y_pred_binary_approx
+
+

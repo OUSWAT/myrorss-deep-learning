@@ -1,7 +1,8 @@
 ##############################################
 # Author: Michael Montalbano
 # Date: 1/20/22
-# 
+#
+# RUN EXP WITH Job Control 
 # tasks: - fix saving results in a df (no unnamed column creation)
 #        - add validation set and read during training
 
@@ -18,14 +19,11 @@ import numpy as np
 # from tensorflow.python.ops.numpy_ops.np_math_ops import true_divide
 from u_net_loop import *
 from job_control import *
-from stats import *
 import pickle
 import datetime
 from sklearn.preprocessing import StandardScaler
 #from stats import *
 import tensorflow.keras.backend as K
-from unet import create_uNet
-import stats
 K.set_image_data_format('channels_last')
 
 supercomputer = True  # See line 138 where paths are set
@@ -34,13 +32,14 @@ swatml = False
 # set constants
 twice = False
 
+# fix
 
 def create_parser():
     parser = argparse.ArgumentParser(description='Hail Swath Learner')
     parser.add_argument(
         '-ID',
         type=str,
-        default='2011_a',
+        default='2006',
         help='ID of dataset')
     parser.add_argument(
         '-exp_type',
@@ -50,7 +49,7 @@ def create_parser():
     parser.add_argument(
         '-batch_size',
         type=int,
-        default=800,
+        default=200,
         help='Enter the batch size.')
     parser.add_argument(
         '-dropout',
@@ -65,7 +64,7 @@ def create_parser():
     parser.add_argument(
         '-epochs',
         type=int,
-        default=60,
+        default=500,
         help='Training epochs')
     parser.add_argument(
         '-steps',
@@ -76,8 +75,9 @@ def create_parser():
         '-filters',
         type=int,
         default=[
-            64,
-            128],
+            12,
+            12,
+            12],
         help='Enter the number of filters for convolutional network')
     parser.add_argument(
         '-unet_type',
@@ -92,12 +92,12 @@ def create_parser():
     parser.add_argument(
         '-lrate',
         type=float,
-        default=0.001,
+        default=0.0001,
         help="Learning rate")
     parser.add_argument(
         '-patience',
         type=int,
-        default=100,
+        default=20,
         help="Patience for early termination")
     parser.add_argument(
         '-network',
@@ -130,8 +130,9 @@ def create_parser():
         default='',
         help="What are the hyperparameters?")
     parser.add_argument('-exp_index', 
+        nargs='+',
         type=int,
-        default=1,
+        default=0,
         help="Used in job_control.")
     parser.add_argument('-thres', 
         type=float,
@@ -155,9 +156,11 @@ def augment_args(args):
     #  of experiments that we will be executing
     # Overides Ntraining and rotation
     if args.lambda_regularization is not None:
-        p = {'lambda_regularization': [0.0001, 0.005, 0.01, 0.1, 0.3, 0.5]}
+        p = {'lambda_regularization': [0.0001, 0.005, 0.01]}
     else:
-        p = {'lambda_regularization': [0.001, 0.01]} # test case
+        p = {'lambda_regularization': [0.01, 0.1],
+             'dropout': [0.1,0.5],
+             'ID': ['2005','2006','2011']} # test case
     # Create the iterator
     ji = JobIterator(p)
     print("Total jobs:", ji.get_njobs())
@@ -167,8 +170,8 @@ def augment_args(args):
             ji.get_njobs()), "exp_index out of range"
 
     # Print the parameters specific to this exp_index
-    print(ji.get_index(args.exp_index))
-
+    print('parameters specific to index {}'.format(args.exp_index),ji.get_index(args.exp_index))
+    
     # Push the attributes to the args object and return a string that describes these structures
     # destructively modifies the args
     # string encodes info about the arguments that have been overwritten
@@ -236,8 +239,6 @@ def training_set_generator_images(ins, outs, batch_size=10,
 def generate_fname():
     pass
 
-
-
 if(swatml):
     strategy = tf.distribute.MirroredStrategy()
     HOME_PATH = '/home/michaelm/'
@@ -259,13 +260,6 @@ def load_dataset():
     ins_train, scalers = transform(ins_train)
     ins_val, scalers = transform(ins_val)
     ins_test, scalers = transform(ins_test)
-    outs_train, scalers = transform(outs_train)
-    outs_val, scalers = transform(outs_val)
-    outs_test, outs_test_scalers = transform_test(
-    outs_test, scalers) 
-    # save the transformation scaler for the true test set
-    outs_scaler = outs_test_scalers[0]
-    pickle.dump(outs_scaler, open('scalers/scaler_outs_{}.pkl'.format(args.ID), 'wb'))
     return ins_train, outs_train, ins_val, outs_val, ins_test, outs_test
 
 #########################################
@@ -303,7 +297,7 @@ def execute_exp(args=None):
                                                   monitor='mean_squared_error',
                                                   restore_best_weights=True,
                                                   min_delta=0.0)
-# Fit the model
+    # Fit the model
     history = model.fit(x=generator,
                         epochs=args.epochs,
                         steps_per_epoch=args.steps,
@@ -314,10 +308,9 @@ def execute_exp(args=None):
 
     results = {}
     results['time'] = time.time()-start
-    #results['true_outs'] = outs
+    results['true_outs'] = outs
     results['predict_training'] = model.predict(ins_train)
     results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
-    #results['true_training'] = outs_train
     #results['predict_validation'] = model.predict(ins_val)
     #results['predict_validation_eval'] = model.evaluate(ins_val, outs_val)
     #results['true_validation'] = outs_val
@@ -325,11 +318,8 @@ def execute_exp(args=None):
     results['predict_testing'] = model.predict(ins_test)
     results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
     #results['outs_test_indices'] = outs_test_indices
-#results['folds'] = folds
     results['history'] = history.history
-    c = stats.stats(results, outs_scaler)
-    results['POD'] = c[0]
-# Save results
+    # Save results
     fbase = r"results/{}_{}e_{}b_{}l2_{}s".format(args.ID, args.epochs, args.batch_size, args.steps)
     results['fname_base'] = fbase
     fp = open("%s_results.pkl" % (fbase), "wb")
@@ -341,14 +331,6 @@ def execute_exp(args=None):
     end = time.time()
     print(fbase)
     print('time:',end-start)
-    # Save statistical results in a database
-    c = stats.stats(results, outs_scaler)
-    POD = c[0]
-    FAR = c[1]
-    CSI = c[2]
-
-
-    print('POD {} FAR {} CSI {}'.format(POD, FAR, CSI))
 
 if __name__ == "__main__":
     parser = create_parser()
