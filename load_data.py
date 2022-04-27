@@ -1,5 +1,4 @@
 ############################################
-
 # Author: Michael Montalbano
 #
 # Purpose: Load data from the MYRORSS directories on OSCER
@@ -26,10 +25,16 @@ from ast import literal_eval
 home = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
-multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min']
+multi_fields = ['MergedReflectivityQCComposite_Max_30min','MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min']
 swath_fields = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MergedReflectivityQCComposite_Max_30min','MESH_Max_30min']
 NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
-degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
+all_degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
+
+# Only load fields present in both MYRORSS and SHAVE
+
+degrees = ['01.00','02.00','03.00','04.00','05.00','06.00','07.00','08.00','09.00','10.00','11.00','12.00','13.00','14.00','15.00','16.00','17.00','18.00','19.00','20.00']
+shaveprod = ['MergedReflectivityQCComposite_Max_30min','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
+
 acceptable_months = ['03','04','05','06','07','08']
 targets = ['target_MESH_Max_30min']
 products = multi_fields  + targets
@@ -72,16 +77,87 @@ def load_data_from_df(df):
     for idx, row in df.iterrows():
         date = row['date']
         month = date[4:6]
-        if month not in acceptable_dates:
+        if month not in acceptable_months:
             break
         n = int(row['features']) # get the number of features
         storm = row['storm_path']
         print(row['feature_list'])
-        try:
-            fname_list = literal_eval(row['feature_list']) # get list of file names
-        except:
-            fname_list = row['feature_list']
+        fname_list = literal_eval(row['feature_list']) # get list of file names
         fname_list = sorted(fname_list) # sort to ensure consistent order
+        print(fname_list)
+        ins = []
+        outs = [] 
+        nc_files = []
+        missing_fields = []
+        valid_fields = make_dict()
+        for product in shaveprod:
+            fname = [f for f in fname_list if product in f]
+            try:
+                fname = fname[0]
+                print('try',fname)
+            except:
+                fname = sorted(fname)
+                print('except',fname)
+        # for fname in fname_list:
+        #     field = fname.split('/')[-3]
+        #     if field == "MESH_Max_30min":
+        #         print(fname,'1',valid_fields)
+        #         if fname.split('/')[-4] == 'target_MESH_Max_30min':
+        #             if valid_fields['target_MESH_Max_30min'] == True:
+        #                 valid_fields['target_MESH_Max_30min'] = False
+        #                 nc = Dataset(fname)
+        #                 var = nc.variables['MESH_Max_30min'][:,:]
+        #                 var = np.where(var<-20,0,var)
+        #                 outs.append(var)
+        #         else:
+        #             if valid_fields[field] == True:
+        #                 valid_fields[field] = False
+        #                 nc = Dataset(fname)
+        #                 var = nc.variables['MESH_Max_30min'][:,:]
+        #                 var = np.where(var<-20,0,var)
+        #                 ins.append(var)
+        #     if field == "MergedReflectivityQC":
+        #         field = fname.split('/')[-2]
+        #         if valid_fields[field] == True:
+        #             valid_fields[field] = False
+        #             nc = Dataset(fname)
+        #             var = nc.variables['MergedReflectivityQC'][:,:]
+        #             var = np.where(var<-20,0,var)
+        #             ins.append(var)
+        #     else:
+        #         try:
+        #             if valid_fields[field] == True:
+        #                 valid_fields[field] = False
+        #                 nc = Dataset(fname)
+        #                 var = nc.variables[field][:,:]
+        #                 var = np.where(var<-20,0,var)
+        #                 ins.append(var)
+        #         except:
+        #             pass
+        # if all(value == False for value in valid_fields.values()):
+        #     print('successful',storm)
+        #     ins_full.append(ins)
+        #     outs_full.append(outs)
+        # else:
+        #     print('not successful',valid_fields)
+    return ins_full, outs_full 
+
+def load_data_from_df(df):
+    ins_full = [] # initialize
+    outs_full = []
+   
+    # now we iterate through each row in the dataframe 
+    for idx, row in df.iterrows():
+        date = row['date']
+        month = date[4:6]
+        if month not in acceptable_months:
+            break
+        n = int(row['features']) # get the number of features
+        storm = row['storm_path']
+        print(row['feature_list'])
+        fname_list = literal_eval(row['feature_list']) # get list of file names
+        fname_list = sorted(fname_list) # sort to ensure consistent order
+        print(fname_list)
         ins = []
         outs = [] 
         nc_files = []
@@ -130,51 +206,7 @@ def load_data_from_df(df):
         else:
             print('not successful',valid_fields)
     return ins_full, outs_full 
-    '''    
 
-        for deg in degrees:
-            nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg)) # can we return signal if there are either multiple single or none? 
-            if nc_file == []:
-                missing_fields.append(deg)
-            else:
-                nc_files.append(nc_file[0])
-            # check for multiple files or 
-        for field in field_list:
-            missing_fields = []
-            nc_file = glob.glob('{}/{}/**/*netcdf'.format(storm,field))
-            if nc_file == []:
-                nc_file = glob.glob('{}/NSE/{}/**/*netcdf'.format(storm,field))
-                if nc_file == []: 
-                    missing_fields.append(field)
-                    continue
-                else:
-                    nc_files.append(nc_file[0])
-            nc_files.append(nc_file[0])
-        if missing_fields != []:
-            nc_files = [] 
-            nc_files = []
-            missing_fiels = []
-            break
-        for f in nc_files:
-            nc = Dataset(f)
-            var = nc.variables[f.split('/')[-3]][:,:]
-            var = np.where(var<-20,0,var)
-            ins.append(var) 
-        ins_full.append(ins)
-       # ins_full.append(np.asarray(ins))
-        # Append out to outs
-        target_file = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/**/*.netcdf'.format(storm))
-        f = target_file[0]        
-        if f == []:
-            ins_full.pop()
-            break
-        nc = Dataset(f)
-        var = nc.variables['MESH_Max_30min'][:,:]
-        var = np.where(var<0,0,var)
-        outs_full.append(var)
-       # outs_full.append(var)
-    return ins_full, outs_full
-    '''
 def get_df_shapes(year='2011'):
     # check shape of ins for each storm_path
     # return df of shape and path
