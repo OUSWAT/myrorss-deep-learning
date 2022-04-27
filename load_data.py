@@ -293,19 +293,8 @@ def modify_ins(ins,indices):
     return ins
 
 def main():
-    year = '2008'
-    df = get_df_shapes(year)
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
+
     year = '2005'
-    df = get_df_shapes(year)
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    year = '2006'
-    df = get_df_shapes(year)
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    year = '2007'
-    df = get_df_shapes(year)
-    df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    year = '2011'
     df = get_df_shapes(year)
     df.to_csv('csv/{}_missing_fields.csv'.format(year))
 
@@ -319,37 +308,6 @@ def main():
     np.save('datasets/ins_{}.npy'.format(year),ins)
     np.save('datasets/outs_{}.npy'.format(year),outs)
 
-    year = '2007'
-    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
-    ins, outs = load_data_from_df(df)
-    ins = np.asarray(ins)
-    outs = np.asarray(outs)
-    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-    np.save('datasets/ins_{}.npy'.format(year),ins)
-    np.save('datasets/outs_{}.npy'.format(year),outs)
-
-    year = '2011'
-    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
-    ins, outs = load_data_from_df(df)
-    ins = np.asarray(ins)
-    outs = np.asarray(outs)
-    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-    np.save('datasets/ins_{}.npy'.format(year),ins)
-    np.save('datasets/outs_{}.npy'.format(year),outs)
-
-    year = '2005'
-    df = pd.read_csv('csv/{}_missing_fields.csv'.format(year))
-    ins, outs = load_data_from_df(df)
-    ins = np.asarray(ins)
-    outs = np.asarray(outs)
-    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-    np.save('datasets/ins_{}.npy'.format(year),ins)
-    np.save('datasets/outs_{}.npy'.format(year),outs)
-
- 
 #    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
 #    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
 #    np.save('datasets/reshaped_ins_2011.npy',ins)
