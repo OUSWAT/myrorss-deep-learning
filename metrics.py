@@ -32,10 +32,7 @@ def csi(hard_discretization_threshold=20):
             )
         csi_value = num_true_positives / denominator
         
-        if use_as_loss_function:
-            return 1. - csi_value
-        else:
-            return csi_value
+        return 1. - csi_value # subtract from 1 so we minimize i.e. increase CSI
     
     return loss
 
@@ -54,12 +51,9 @@ def POD(hard_discretization_threshold=20):
             TP + FN +
             K.epsilon() # dont div by 0
             )
-        csi_value = TP / denominator
+        POD  = TP / denominator
 
-        if use_as_loss_function:
-            return 1. - csi_value
-        else:
-            return csi_value
+        return POD
 
     return loss
 
@@ -79,12 +73,9 @@ def FAR(hard_discretization_threshold=20):
             TP + FP +
             K.epsilon() # dont div by 0
             )
-        csi_value = TP / denominator
+        FAR = TP / denominator
 
-        if use_as_loss_function:
-            return 1. - csi_value
-        else:
-            return csi_value
+        return FAR
 
     return loss
 
