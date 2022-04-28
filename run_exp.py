@@ -40,11 +40,11 @@ def create_parser():
         '-ID',
         type=str,
         default='raw',
-        help='ID of dataset (2005, 2006, 2007)')
+        help='ID of dataset (2005, 2006, 2007, shavelike)')
     parser.add_argument(
         '-exp_type',
         type=str,
-        default='l1',
+        default='l2',
         help='How to name this model?')
     parser.add_argument(
         '-batch_size',
@@ -59,7 +59,7 @@ def create_parser():
     parser.add_argument(
         '-lambda_regularization',
         type=float,
-        default=0.2,
+        default=0.1,
         help='Enter l1, l2, or none.')
     parser.add_argument(
         '-epochs',
@@ -75,9 +75,9 @@ def create_parser():
         '-filters',
         type=int,
         default=[
-            12,
-            12,
-            12
+            32,
+            64,
+            128
             ],
         help='Enter the number of filters for convolutional network')
     parser.add_argument(
@@ -125,23 +125,6 @@ def create_parser():
         nargs='+',
         type=int,
         help='Array of integers')
-    parser.add_argument(
-        '-type',
-        type=str,
-        default='regression',
-        help='How type')
-    parser.add_argument(
-        '-error',
-        type=str,
-        default='mse',
-        help="What type of error?")
-    parser.add_argument(
-        '-hyperparameters_string',
-        type=str,
-        default='',
-        help="What are the hyperparameters?")
-    parser.add_argument('-thres', type=float, default=None,
-                        help='Threshold (for what purpose?).')
     return parser
 
 
@@ -311,12 +294,12 @@ results['history'] = history.history
 # Save results
 fbase = r"results/{}_{}_{}_{}e_{}b_{}l2_{}s".format(args.loss, args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
 results['fname_base'] = fbase
-fp = open("%s_results.pkl" % (fbase), "wb")
+fp = open("{}_results.pkl".format(fbase), "wb")
 pickle.dump(results, fp)
 fp.close()
 
 # Model
-model.save("%s_model" % (fbase))
+model.save("{}_model.h5".format(fbase)) # necessary if using custom metrics
 end = time.time()
 print(fbase)
 print('time:',end-start)

@@ -17,7 +17,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
-from custom_model_elements import myMED
+from metrics import myMED, POD, FAR
 #from helper_functions import mean_iou, dice_coef, dice_coef,loss, compute_iou
 binary=False
 mse=True
@@ -60,7 +60,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                               kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
 
     # with downsampling swing finisor = BatchNormalization()(tensor)
@@ -71,7 +71,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                               kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
         if dropout is not None:
             tensor = Dropout(dropout)(tensor)
@@ -90,7 +90,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                           kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
     print(tensor)
     tensor = BatchNormalization()(tensor)
@@ -100,7 +100,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                           kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
     print(tensor)
     tensor = BatchNormalization()(tensor)
@@ -118,7 +118,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                               kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
@@ -127,7 +127,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                               kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[0],
@@ -136,7 +136,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
+                           kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
 
     output_tensor = Convolution2D(1,
@@ -161,6 +161,9 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
     if loss == 'MSE':
         model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
             metrics=tf.keras.metrics.RootMeanSquaredError())
+    if loss == 'MSE_fancy':
+        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
+            metrics=[tf.keras.losses.MeanSquaredError(),POD,FAR])
     if loss == 'MED':
         model.compile(loss=myMED, optimizer=Opt,
             metrics=tf.keras.metrics.RootMeanSquaredError())
