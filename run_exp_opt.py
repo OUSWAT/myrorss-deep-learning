@@ -46,58 +46,82 @@ data_path = '/condo/swatwork/mcmontalbano/SHAVE/data'
 start_time = time.time()
 twice = False
 
-
-def create_parser():  # this code describes the indicies needed in past design
+def create_parser():
     parser = argparse.ArgumentParser(description='Hail Swath Learner')
+    parser.add_argument(
+        '-ID',
+        type=str,
+        default='raw',
+        help='ID of dataset (2005, 2006, 2007)')
     parser.add_argument(
         '-exp_type',
         type=str,
-        default='mse_1999',
+        default='l1',
         help='How to name this model?')
+    parser.add_argument(
+        '-batch_size',
+        type=int,
+        default=256,
+        help='Enter the batch size.')
     parser.add_argument(
         '-dropout',
         type=float,
         default=0.1,
         help='Enter the dropout rate (0<p<1)')
     parser.add_argument(
+        '-lambda_regularization',
+        type=float,
+        default=0.2,
+        help='Enter l1, l2, or none.')
+    parser.add_argument(
         '-epochs',
         type=int,
-        default=400,
+        default=100,
         help='Training epochs')
     parser.add_argument(
-        '-results_path',
-        type=str,
-        default=r'C:\\Users\\User\\deep_learning\\data',
-        help='Results directory')
+        '-steps',
+        type=int,
+        default=10,
+        help='Steps per epoch')
     parser.add_argument(
-        '-lrate',
-        type=float,
-        default=0.001,
-        help="Learning rate")
-    parser.add_argument('-patience', type=int, default=200,
-                        help="Patience for early termination")
+        '-filters',
+        type=int,
+        default=[
+            12,
+            12,
+            12
+            ],
+        help='Enter the number of filters for convolutional network')
     parser.add_argument(
-        '-network',
+        '-loss',
         type=str,
-        default='unet',
-        help='Enter u-net.')
+        default='MSE',
+        help='Enter a loss function (MSE, MED, etc')
     parser.add_argument(
         '-unet_type',
         type=str,
         default='add',
         help='Enter whether to concatenate or add during skips in unet')
     parser.add_argument(
-        '-filters',
-        type=int,
-        default=[
-            16,
-            16],
-        help='Enter the number of filters for convolutional network')
+        '-results_path',
+        type=str,
+        default=RESULTS_PATH,
+        help='Results directory')
     parser.add_argument(
-        '-batch_size',
+        '-lrate',
+        type=float,
+        default=0.001,
+        help="Learning rate")
+    parser.add_argument(
+        '-patience',
         type=int,
-        default=1,
-        help='Enter the batch size.')
+        default=75,
+        help="Patience for early termination")
+    parser.add_argument(
+        '-network',
+        type=str,
+        default='unet',
+        help='Enter u-net.')
     parser.add_argument(
         '-activation',
         type=str,
@@ -123,6 +147,13 @@ def create_parser():  # this code describes the indicies needed in past design
         type=str,
         default='mse',
         help="What type of error?")
+    parser.add_argument(
+        '-hyperparameters_string',
+        type=str,
+        default='',
+        help="What are the hyperparameters?")
+    parser.add_argument('-thres', type=float, default=None,
+                        help='Threshold (for what purpose?).')
     return parser
 
 
@@ -131,9 +162,9 @@ def data():
     Returns the dataset:
     @xtrain, ytrain, xtest, ytest
     """
-    num_id = random.randint(0, 10000)  # random ID for each model
-    input_shape = (15930, 60, 60, 39)  # hard-code this for the time being
-    ID = '2011_qc'
+    #num_id = random.randint(0, 10000)  # random ID for each model
+    #input_shape = (15930, 60, 60, 39)  # hard-code this for the time being
+    ID = '2005'
     data_path = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets/'
 
     def transform(var):
@@ -162,62 +193,19 @@ def data():
 
         return tdata_transformed, channel_scalers
 
-    def transform_test(var, scalers):
-        '''
-        This function doesn't appear to serve any real purpopse beyond the function above. delete and test
-        returns
-        @aram tdata_transformed -
-        @channel_scalers - the scalers used to convert each channel back to its original (60 x 60 form)
-        '''
-        n_channels = var.shape[3]
-        tdata_transformed = np.zeros_like(var)
-        channel_scalers = []
-        for i in range(n_channels):
-            mmx = StandardScaler()
-            slc = var[:, :, :, i].reshape(var.shape[0], 60 * 60)
-            transformed = mmx.fit_transform(slc)
-            transformed = transformed.reshape(
-                var.shape[0], 60, 60)  # reshape it back to tiles
-            # put it in the transformed array
-            tdata_transformed[:, :, :, i] = transformed
-            channel_scalers.append(mmx)
-        return tdata_transformed, channel_scalers
-
-    exp_type = 'mse'
     ins = np.load('{}/ins_{}.npy'.format(data_path, ID))
     outs = np.load('{}/outs_{}.npy'.format(data_path, ID))
     indices = np.asarray(range(ins.shape[0]))
 
-    print(ins.shape)
-    print(ins[0].itemsize * ins[0].size)
-
     # train test split 75 25
     rand = 3
     ins_train, ins_test, outs_train, outs_test = train_test_split(
-        ins, outs, test_size=0.25, random_state=rand)
-    ins_train_indices, ins_test_indices, outs_train_indices, outs_test_indices = train_test_split(
-        indices, indices, test_size=0.25, random_state=rand)
+        ins, outs, test_size=0.16, random_state=rand)
+    # ins_train_indices, ins_test_indices, outs_train_indices, outs_test_indices = train_test_split(
+    #     indices, indices, test_size=0.25, random_state=rand)
 
     ins_train, scalers = transform(ins_train)
-    ins_test, scalers = transform_test(ins_test, scalers)
-    if os.path.exists('scaler_ins_random_state_{}'.format(rand)):
-        pickle.dump(
-            scalers,
-            open(
-                'scaler_ins_random_state_{}.pkl'.format(rand),
-                'wb'))
-
-    outs_train, scalers = transform(outs_train)
-    outs_test, scalers = transform_test(outs_test, scalers)
-    outs_test_scaler = scalers[0]
-    pickle.dump('scalers/outs_test_scaler_opt.pkl')
-    if not os.path.exists('scalers/scaler_outs_random_state_{}'.format(rand)):
-        pickle.dump(
-            scalers,
-            open(
-                'scalers/scaler_outs_random_state_{}.pkl'.format(rand),
-                'wb'))
-
+    ins_test, scalers = transform(ins_test)
     return ins_train, outs_train, ins_test, outs_test
 
 
@@ -232,7 +220,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
     @param activation: pick any activation function within the keras API
     '''
     dropout = None  # figure out why dropout can't be set from within the model call? maybe call it in the main loop?
-    batch_size = 20
+    batch_size = 256
 
     def training_set_generator_images(ins, outs, batch_size=50,
                                       input_name='input',
@@ -259,7 +247,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
     def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
     activation = lrelu
 
-    in_shape = (15930, 60, 39)
+    in_shape = (10642, 60, 39)
     patience = 200
     # used to store high-res tensors for skip connections to upsampled tensors
     # (The Strings in the Net)
@@ -269,10 +257,11 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
     # prevents overfitting by normalizing for each batch, i.e. for each batch
     # of samples
     tensor = BatchNormalization()(input_tensor)
-    #tensor = GaussianNoise(0.1)(tensor)
+    tensor = GaussianNoise(0.1)(tensor)
+    
     # downsampling loop
-    filters = [32, 64, 64]
-    dropout = {{choice((0.1,0.3,0.5))}}
+    filters = [32, 64, 128]
+    l2 = {{choice((0.1,0.3,0.5))}}
     for idx, f in enumerate(filters[:-1]):
         tensor = Convolution2D(f,
                                kernel_size=(3, 3),
@@ -280,7 +269,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l2(l2),
                                activation=activation)(tensor)
    #     if dropout is not None:
    # tensor = Dropout({{uniform(0,1)}})(tensor) # parameter search between
@@ -293,7 +282,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l2(l2),
                                activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
 
@@ -313,7 +302,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l2(l2),
                            activation=activation)(tensor)
     if dropout is not None:
         tensor = Dropout(dropout)(tensor)
@@ -325,7 +314,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l2(l2),
                            activation=activation)(tensor)
     tensor = BatchNormalization()(tensor)
 
@@ -342,7 +331,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l2(l2),
                                activation=activation)(tensor)
 
 #        if dropout is not None:
@@ -355,7 +344,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l2(l2),
                                activation=activation)(tensor)
 
 #        if dropout is not None:
@@ -369,7 +358,7 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l2(l2),
                            activation=activation)(tensor)
 
     output_tensor = Convolution2D(1,
@@ -414,14 +403,6 @@ def model(x_train, y_train, x_test, y_test, dropout=None):
     # are you sure this is - mse???
     return {'loss': mse1, 'status': STATUS_OK, 'model': model}
 
-# Standard MSE loss function plus term penalizing only misses
-
-
-def my_MSE_fewer_misses(y_true, y_pred):
-    return K.square(y_pred - y_true) + K.maximum((y_true -
-                                                  y_pred - 20), 0) + K.maximum((y_pred - y_true + 10), 0)
-
-
 #########################################
 # set args and train
 if __name__ == '__main__':
@@ -449,11 +430,9 @@ if __name__ == '__main__':
     results['true_testing'] = outs_test
     results['predict_testing'] = model.predict(ins_test)
     results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
-    c = stats.stats(results, scaler)
-    POD, FAR, CSI = [x for x in c[:-1]]  # return all but  the bias
-    print('POD {} FAR {} CSI {}'.format(POD, FAR, CSI))
+
     # Save results
-    fbase = r"results/best_model_{}_{}".format(exp_type, ID)
+    fbase = r"results/{}_{}_{}_{}e_{}b_{}l2_{}s".format(args.loss, args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
     results['fname_base'] = fbase
     fp = open("%s_results.pkl" % (fbase), "wb")
     pickle.dump(results, fp)
@@ -461,8 +440,8 @@ if __name__ == '__main__':
 
     # Model
     model.save("%s_model" % (fbase))
-
+    end = time.time()
     print(fbase)
-    print(start - time.time())
+    print('time:',end-start)
 
 # save model in txt
