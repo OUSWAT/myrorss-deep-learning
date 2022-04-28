@@ -17,6 +17,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
+from custom_model_elements import myMED
 #from helper_functions import mean_iou, dice_coef, dice_coef,loss, compute_iou
 binary=False
 mse=True
@@ -24,7 +25,7 @@ mse=True
 print(tf.__version__)
 
 
-def UNet(input_shape, nclasses=2, filters=[16, 32],
+def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
          lambda_regularization=None, dropout=None,
          activation='relu'):
     '''
@@ -38,7 +39,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
     '''
 
     def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
-    activation = lrelu
+    activation = lrelu       
 
     # used to store high-res tensors for skip connections to upsampled tensors
     # (The Strings in the Net)
@@ -59,7 +60,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                                activation=activation)(tensor)
 
     # with downsampling swing finisor = BatchNormalization()(tensor)
@@ -70,7 +71,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                                activation=activation)(tensor)
         if dropout is not None:
             tensor = Dropout(dropout)(tensor)
@@ -89,7 +90,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                            activation=activation)(tensor)
     print(tensor)
     tensor = BatchNormalization()(tensor)
@@ -99,7 +100,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                            activation=activation)(tensor)
     print(tensor)
     tensor = BatchNormalization()(tensor)
@@ -117,7 +118,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                                activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
@@ -126,7 +127,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                                use_bias=True,
                                kernel_initializer='random_uniform',
                                bias_initializer='zeros',
-                               kernel_regularizer=None,
+                               kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                                activation=activation)(tensor)
         tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[0],
@@ -135,7 +136,7 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
                            use_bias=True,
                            kernel_initializer='random_uniform',
                            bias_initializer='zeros',
-                           kernel_regularizer=None,
+                           kernel_regularizer=tf.keras.regularizers.l1(lambda_regularization),
                            activation=activation)(tensor)
 
     output_tensor = Convolution2D(1,
@@ -156,10 +157,13 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
         amsgrad=False)
 
     model = Model(inputs=input_tensor, outputs=output_tensor)
-    if mse:
+    
+    if loss == 'MSE':
         model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                  metrics=tf.keras.metrics.RootMeanSquaredError())
-
+            metrics=tf.keras.metrics.RootMeanSquaredError())
+    if loss == 'MED':
+        model.compile(loss=myMED, optimizer=Opt,
+            metrics=tf.keras.metrics.RootMeanSquaredError())
     if binary:
         model.compile(tf.keras.losses.BinaryCrossentropy(), 
                   metrics=tf.keras.metrics.TruePositives(thresholds=[0.3,0.5,0.7]),
@@ -168,43 +172,6 @@ def UNet(input_shape, nclasses=2, filters=[16, 32],
     # model.compile(loss=custom,optimizer=opt,metrics=['mse'])
     return model
 
-
-def myMED(weight=0.0):
-    def loss(y_true, y_pred):
-        y_true_discrete = tf.cast(tf.round(y_true), tf.int32)
-        y_pred_discrete = tf.cast(tf.round(y_pred), tf.int32)
-        dist = tf.norm(y_true_discrete - y_pred_discrete, axis=-1) # axis = -1 means along the last dimension (channel)
-        dist = tf.cast(dist, tf.float32)
-        dist = tf.reduce_mean(dist)
-        return dist
-    return loss
-        # for mean error distance you need to 
-        # sum up the distance from each pixel in A to every non-zero pixel in B
-        # and then divide by the number of non-zero pixels in B
-        # this is the same as taking the mean of the distance
-        # but this is not the same as the mean of the distance
-        # because the distance is not a probability
-        # so you need to take the mean of the mean of the distance
-        # which is the same as taking the mean of the distance
-        # but this is not the same as the mean of the distance
-        # because the distance is not a probability
-        # so you need to take the mean of the mean of the distance
-
-
 def create_UNetPlusPlus():
     # TBD
     pass
-
-def my_POD_loss(y_true, y_pred):
-    # TBD
-    pass
-
-def soft_disc(y_true, y_pred):
-    # soft discretation cutoff, i.e. soft thresholding
-    # rather than convert to 0/1 in ins/outs, convert during training
-    c = 5
-    cutoff = 30
-    y_pred_binary_approx = tf.math.sigmoid(c * (y_pred - cutoff))
-    return y_pred_binary_approx
-
-

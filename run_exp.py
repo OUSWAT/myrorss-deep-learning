@@ -39,17 +39,17 @@ def create_parser():
     parser.add_argument(
         '-ID',
         type=str,
-        default='2008_2',
-        help='ID of dataset')
+        default='raw',
+        help='ID of dataset (2005, 2006, 2007)')
     parser.add_argument(
         '-exp_type',
         type=str,
-        default='64a128_filters',
+        default='l1',
         help='How to name this model?')
     parser.add_argument(
         '-batch_size',
         type=int,
-        default=100,
+        default=256,
         help='Enter the batch size.')
     parser.add_argument(
         '-dropout',
@@ -59,7 +59,7 @@ def create_parser():
     parser.add_argument(
         '-lambda_regularization',
         type=float,
-        default=None,
+        default=0.2,
         help='Enter l1, l2, or none.')
     parser.add_argument(
         '-epochs',
@@ -80,6 +80,11 @@ def create_parser():
             12
             ],
         help='Enter the number of filters for convolutional network')
+    parser.add_argument(
+        '-loss',
+        type=str,
+        default='MSE',
+        help='Enter a loss function (MSE, MED, etc')
     parser.add_argument(
         '-unet_type',
         type=str,
@@ -256,7 +261,7 @@ if swatml:
     with strategy.scope():
         model = UNet(ins_train.shape[1:], nclasses=1)
 elif supercomputer:
-    model = UNet(ins_train.shape[1:], nclasses=1,filters=args.filters, lambda_regularization=args.lambda_regularization, dropout=args.dropout)  # create model
+    model = UNet(ins_train.shape[1:], args.loss, nclasses=1,filters=args.filters, lambda_regularization=args.lambda_regularization, dropout=args.dropout)  # create model
     '''
     model = create_uNet(ins_train.shape[1:], nclasses=5,lambda_regularization=args.lambda_regularization,
                         activation=args.activation, dropout=args.dropout,
@@ -277,6 +282,8 @@ early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
                                                   monitor='val_loss',
                                                   restore_best_weights=True,
                                                   min_delta=0.0)
+
+checkpoint_cb = keras.callbacks.ModelCheckpoint("results/chkpt_model.h5")
 # Fit the model
 history = model.fit(x=generator,
                     epochs=args.epochs,
@@ -284,7 +291,7 @@ history = model.fit(x=generator,
                     use_multiprocessing=False,
                     validation_data=(ins_val, outs_val),
                     verbose=True,
-                    callbacks=[early_stopping_cb])
+                    callbacks=[early_stopping_cb,checkpoint_cb])
 
 results = {}
 results['true_outs'] = outs
@@ -302,7 +309,7 @@ results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
 results['history'] = history.history
 
 # Save results
-fbase = r"results/{}_{}_{}e_{}b_{}l2_{}s".format(args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
+fbase = r"results/{}_{}_{}_{}e_{}b_{}l2_{}s".format(args.loss, args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
 results['fname_base'] = fbase
 fp = open("%s_results.pkl" % (fbase), "wb")
 pickle.dump(results, fp)
