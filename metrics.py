@@ -20,7 +20,7 @@ def find_coordinates_tensor(A):
                 coord_A.append([i,j])  
     return coord_A
 
-def find_shortest_distance_tensor(A,B):
+def find_mean_distance_tensor(A,B):
     # returns a tensor of coordinates of nonzero elements in A
     coord_A = find_coordinates_tensor(A)
     coord_B = find_coordinates_tensor(B)
@@ -28,32 +28,17 @@ def find_shortest_distance_tensor(A,B):
     distances = []
     for coord in coord_B:
         distances.append(np.linalg.norm(np.subtract(coord,point)))
-    return np.min(distances)
+    return np.mean(distances)
 
 def myMED(y_true, y_pred):
     # Sample specific MED (i.e. not whole batch at once)
+    # Either maxpool or limit domain size or threshold by high val to reduce computation
     target_tensor = tf.cast(tf.where(y_true>cutoff,0.0,1.0),tf.float32)
     prediction_tensor = tf.cast(tf.where(y_pred>cutoff,0.0,1.0),tf.float32)
     coord_A = find_coordinates_tensor(target_tensor)
     coord_B = find_coordinates_tensor(prediction_tensor)
-    min_dist = find_shortest_distance_tensor(coord_A,coord_B)
-    return min_dist
-    # Github pilot generated comments
-    # find shortest distance between target_tensor and prediction_tensor
-    # i.e. find the distance between the two closest points
-    # you'll have to do it one by one right, 
-    # multiply one tensor to get all but one point,
-    # then find the minimum distance to a nonzero point in B_tensor
-    # This could work if you make the threshold really high like 50, could cut down on
-    # the number of points you have to compare to
-    # not sure how to do this in tensorflow
-
-    # or you could maxpool to reduce the number of pixels
-    dist = tf.norm(target_tensor - prediction_tensor, axis=-1) # axis = -1 means along the last dimension (channel)
-    dist = tf.reduce_mean(dist)
-    count = tf.math.count_nonzero(target_tensor) # we use
-    MED = dist/count
-    return MED
+    mean_error_distance = find_mean_distance_tensor(coord_A,coord_B)
+    return mean_error_distance
 
 def csi(hard_discretization_threshold=20):
     # From CIRA guide to loss functions, with slight differences        
