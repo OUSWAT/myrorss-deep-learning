@@ -3,13 +3,53 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 from tensorflow.keras import Model
 from tensorflow.keras import Input
-from tensorflow.keras.layers import Concatenate, Dense
+from tensorflow.keras.layers import Concatenate, Dense  
+
+def to_tensor(a):
+    return tf.convert_to_tensor(a, dtype=tf.float32)
+``
+def find_coordinates_tensor(A):
+    # returns a tensor of coordinates of nonzero elements in A
+    coord_A = []
+    length = A.shape[0]
+    for idx, row in enumerate(A):
+        for idx2, pixel in enumerate(row):
+            if pixel == 1: 
+                i = idx%length
+                j = idx2
+                coord_A.append([i,j])  
+    return coord_A
+
+def find_shortest_distance_tensor(A,B):
+    # returns a tensor of coordinates of nonzero elements in A
+    coord_A = find_coordinates_tensor(A)
+    coord_B = find_coordinates_tensor(B)
+    point = coord_A[0]
+    distances = []
+    for coord in coord_B:
+        distances.append(np.linalg.norm(np.subtract(coord,point)))
+    return np.min(distances)
 
 def myMED(y_true, y_pred):
     # Sample specific MED (i.e. not whole batch at once)
     target_tensor = tf.cast(tf.where(y_true>cutoff,0.0,1.0),tf.float32)
     prediction_tensor = tf.cast(tf.where(y_pred>cutoff,0.0,1.0),tf.float32)
-    dist = tf.norm(y_true_discrete - y_pred_discrete, axis=-1) # axis = -1 means along the last dimension (channel)
+    coord_A = find_coordinates_tensor(target_tensor)
+    coord_B = find_coordinates_tensor(prediction_tensor)
+    min_dist = find_shortest_distance_tensor(coord_A,coord_B)
+    return min_dist
+    # Github pilot generated comments
+    # find shortest distance between target_tensor and prediction_tensor
+    # i.e. find the distance between the two closest points
+    # you'll have to do it one by one right, 
+    # multiply one tensor to get all but one point,
+    # then find the minimum distance to a nonzero point in B_tensor
+    # This could work if you make the threshold really high like 50, could cut down on
+    # the number of points you have to compare to
+    # not sure how to do this in tensorflow
+
+    # or you could maxpool to reduce the number of pixels
+    dist = tf.norm(target_tensor - prediction_tensor, axis=-1) # axis = -1 means along the last dimension (channel)
     dist = tf.reduce_mean(dist)
     count = tf.math.count_nonzero(target_tensor) # we use
     MED = dist/count
@@ -79,4 +119,26 @@ def FAR(hard_discretization_threshold=20):
 
     return loss
 
+# find the shortest distance between two set of points as numpy arrays
+def find_coordinates(A):
+    # returns a tensor of coordinates of nonzero elements in A
+    coord_A = []
+    length = A.shape[0]
+    for idx, row in enumerate(A):
+        for idx2, pixel in enumerate(row):
+            if pixel == 1: 
+                i = idx%length
+                j = idx2
+                coord_A.append([i,j])  
+    return coord_A
 
+def find_shortest_distance(A,B):
+    # returns a tensor of coordinates of nonzero elements in A
+    coord_A = find_coordinates(A)
+    coord_B = find_coordinates(B)
+
+    point = coord_A[0]
+    distances = []
+    for coord in coord_B:
+        distances.append(np.linalg.norm(np.subtract(coord,point)))
+    return np.min(distances)    
