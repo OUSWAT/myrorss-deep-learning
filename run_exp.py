@@ -303,13 +303,8 @@ model.save("{}_model.h5".format(fbase)) # necessary if using custom metrics
 end = time.time()
 print(fbase)
 print('time:',end-start)
-# Save statistical results in a database
-#c = stats.stats(results)
-#POD = c[0]
-#FAR = c[1]
-#CSI = #c[2]
-#hyperparameter_df = pd.read_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-#row = {'hyperparameters': fbase, 'POD': POD, 'FAR':FAR, 'CSI':CSI, 'mse':results['predict_testing_eval'][0],'size':outs_test.shape[0],'date':datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),'runtime':end-start}
-#hyperparameter_df.loc[len(hyperparameter_df.index)] = row
-# hyperparameter_df.to_csv('{}/performance_metrics.csv'.format(HOME_PATH))
-#print('POD {} FAR {} CSI {}'.format(POD, FAR, CSI))
+
+ins = np.load('datasets/ins_shavelike.npy')
+outs = np.load('datasets/outs_raw.npy')
+
+print(model.evaluate(ins,outs))
