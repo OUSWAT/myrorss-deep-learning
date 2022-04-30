@@ -165,7 +165,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
         model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
             metrics=[tf.keras.losses.MeanSquaredError(),POD,FAR])
     if loss == 'MED':
-        model.compile(loss=myMED, optimizer=Opt,
+        model.compile(loss=myMED, optimizer=opt,
             metrics=tf.keras.metrics.RootMeanSquaredError())
     if binary:
         model.compile(tf.keras.losses.BinaryCrossentropy(), 
