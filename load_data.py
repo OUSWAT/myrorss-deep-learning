@@ -33,17 +33,14 @@ all_degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '0
 # Only load fields present in both MYRORSS and SHAVE
 
 degrees = ['01.00','02.00','03.00','04.00','05.00','06.00','07.00','08.00','09.00','10.00','11.00','12.00','13.00','14.00','15.00','16.00','17.00','18.00','19.00','20.00']
-shaveprod = ['MergedReflectivityQCComposite_Max_30min','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min','target_MESH_Max_30min']
+degrees = ['dummy/{}'.format(d) for d in degrees]
+shaveprod = ['MergedReflectivityQCComposite_Max_30min','MergedLLShear_Max_30min','MergedMLShear_Max_30min','MESH_Max_30min','Reflectivity_0C_Max_30min','target_MESH_Max_30min']
 shaveprod=shaveprod+degrees #degrees are read in last in shave testing
 acceptable_months = ['03','04','05','06','07','08']
 targets = ['target_MESH_Max_30min']
 products = multi_fields  + targets
 field_list =  swath_fields
-# INPUT VARIABLES HERE
-# make this more elegant, to input from the shell. check e0xtract.py
-#year=str(sys.argv[1])
-#b0=int(sys.argv[2])
-#b1=int(sys.argv[3])
+
 year='2008'
 
 def make_dict():
@@ -87,8 +84,6 @@ def load_data_from_df(df):
         print('fnamelist',fname_list)
         ins = []
         outs = [] 
-        nc_files = []
-        missing_fields = []
         valid_fields = make_dict()
         for product in shaveprod:
             print(product)
@@ -97,49 +92,27 @@ def load_data_from_df(df):
                 fname = fname[0]
                 print('try',fname)
             except:
-                break               
-        for fname in fname_list:
-            field = fname.split('/')[-3]
-            if field == "MESH_Max_30min":
-        #         print(fname,'1',valid_fields)
-        #         if fname.split('/')[-4] == 'target_MESH_Max_30min':
-        #             if valid_fields['target_MESH_Max_30min'] == True:
-        #                 valid_fields['target_MESH_Max_30min'] = False
-        #                 nc = Dataset(fname)
-        #                 var = nc.variables['MESH_Max_30min'][:,:]
-        #                 var = np.where(var<-20,0,var)
-        #                 outs.append(var)
-        #         else:
-        #             if valid_fields[field] == True:
-        #                 valid_fields[field] = False
-        #                 nc = Dataset(fname)
-        #                 var = nc.variables['MESH_Max_30min'][:,:]
-        #                 var = np.where(var<-20,0,var)
-        #                 ins.append(var)
-        #     if field == "MergedReflectivityQC":
-        #         field = fname.split('/')[-2]
-        #         if valid_fields[field] == True:
-        #             valid_fields[field] = False
-        #             nc = Dataset(fname)
-        #             var = nc.variables['MergedReflectivityQC'][:,:]
-        #             var = np.where(var<-20,0,var)
-        #             ins.append(var)
-        #     else:
-        #         try:
-        #             if valid_fields[field] == True:
-        #                 valid_fields[field] = False
-        #                 nc = Dataset(fname)
-        #                 var = nc.variables[field][:,:]
-        #                 var = np.where(var<-20,0,var)
-        #                 ins.append(var)
-        #         except:
-        #             pass
-        # if all(value == False for value in valid_fields.values()):
-        #     print('successful',storm)
-        #     ins_full.append(ins)
-        #     outs_full.append(outs)
-        # else:
-        #     print('not successful',valid_fields)
+                break
+            if valid_fields[product] and product != 'target_MESH_Max_30min':
+                nc = Dataset(fname)
+                var = nc.variables[product][:,:]
+                ins.append(var)
+                valid_fields[product] = False  
+            elif valid_fields[product] and product == 'target_MESH_Max_30min':
+                nc = Dataset(fname)
+                var = nc.variables['MESH_Max_30min'][:,:]
+                outs.append(var)
+                valid_fields[product] = False
+            elif valid_fields[product] and product.split('/')[0] == 'dummy':
+                nc = Dataset(fname)
+                deg = product.split('/')[1]
+                var = nc.variables["MergedReflectivityQC"][:,:]
+                ins.append(var)
+                valid_fields[product] = False             
+        if all(value == False for value in valid_fields.values()):
+            print('successful',storm)
+            ins_full.append(ins)
+            outs_full.append(outs)
     return ins_full, outs_full 
 
 def load_data_from_df2(df):
