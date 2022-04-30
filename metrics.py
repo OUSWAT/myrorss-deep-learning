@@ -7,17 +7,23 @@ from tensorflow.keras.layers import Concatenate, Dense
 
 def to_tensor(a):
     return tf.convert_to_tensor(a, dtype=tf.float32)
-``
+
 def find_coordinates_tensor(A):
     # returns a tensor of coordinates of nonzero elements in A
     coord_A = []
     length = A.shape[0]
-    for idx, row in enumerate(A):
-        for idx2, pixel in enumerate(row):
+    A = A.numpy()
+    for i in range(length):
+        for j in range(length):
+            # multiply A by 
+            row = np.zeros(length)
+            row[i] = 1
+            col = np.zeros(length)
+            col[j] = 1
+            # compute < row | A | col >                
+            pixel = np.dot(np.dot(col,A),row) # < col | A | row >
             if pixel == 1: 
-                i = idx%length
-                j = idx2
-                coord_A.append([i,j])  
+                coord_A.append([i,j])
     return coord_A
 
 def find_mean_distance_tensor(A,B):
@@ -40,7 +46,11 @@ def myMED(y_true, y_pred):
     mean_error_distance = find_mean_distance_tensor(coord_A,coord_B)
     return mean_error_distance
 
-def csi(hard_discretization_threshold=20):
+#def hausdorf(y_true, y_pred):
+    # get max distance between A and B
+
+
+def csi(cutoff=20):
     # From CIRA guide to loss functions, with slight differences        
     # Does not train well off thebat, but could be used as second phase for MSE model
     def loss(target_tensor, prediction_tensor):
@@ -61,7 +71,7 @@ def csi(hard_discretization_threshold=20):
     
     return loss
 
-def POD(hard_discretization_threshold=20):
+def POD(cutoff=20):
     # From CIRA guide to loss functions, with slight differences
     # Does not train well off thebat, but could be used as second phase for MSE model
     def loss(target_tensor, prediction_tensor):
@@ -83,7 +93,7 @@ def POD(hard_discretization_threshold=20):
     return loss
 
 
-def FAR(hard_discretization_threshold=20):
+def FAR(cutoff=20):
     # From CIRA guide to loss functions, with slight differences
     # Does not train well off thebat, but could be used as second phase for MSE model
     def loss(target_tensor, prediction_tensor):
