@@ -7,7 +7,7 @@ from tensorflow.keras.layers import Concatenate, Dense
 
 def to_tensor(a):
     return tf.convert_to_tensor(a, dtype=tf.float32)
-    
+
 def find_coordinates_tensor(A):
     # returns a tensor of coordinates of nonzero elements in A
     coord_A = []
@@ -20,7 +20,8 @@ def find_coordinates_tensor(A):
             row[i] = 1
             col = np.zeros(length)
             col[j] = 1
-            pixel = np.dot(np.dot(col,A),row)
+            # compute < row | A | col >                
+            pixel = np.dot(np.dot(col,A),row) # < col | A | row >
             if pixel == 1: 
                 coord_A.append([i,j])
     return coord_A
