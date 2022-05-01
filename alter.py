@@ -157,22 +157,12 @@ def plot_hist(numbers, threshold, ID='most_recent'):
 def main():
    
    # shave = np.load('datasets/outs_raw.npy')
-    ins06 = np.load('datasets/ins_2006.npy')
-    outs06 = np.load('datasets/outs_2006.npy')
-    ins08 = np.load('datasets/ins_2008.npy')
-    outs08 = np.load('datasets/outs_2008.npy')
+    ins = np.load('datasets/ins_2005.npy')
+    ind = np.concatenate((np.arange(20,5,-1),np.asarray([4,3])))
+    for i in ind:
+        ins = np.delete(ins,i,axis=3)
+    np.save('ins_2005_shavelike.npy', ins)
 
-    hist, ind06 = get_hist(outs06)
-    print('hist06 (before) {}'.format(hist))
-    hist, ind08 = get_hist(outs08)
-    print(outs06.shape)
-    ins, outs = add_images(ind08, ins08, outs08, ins06, outs06, N=1800, index=1)
-    print(outs.shape)
-    np.save('ins06.npy', ins)
-    np.save('outs06.npy', outs)
-
-   # ins_shave = np.load('datasets/ins_raw.npy')
-   # outs_shave = np.load('datasets/outs_raw.npy')
    # ins_new, outs_new = new_dataset(ins, outs, ins_shave, outs_shave, ID='abs_of_mean')
 
 if __name__ == "__main__":
