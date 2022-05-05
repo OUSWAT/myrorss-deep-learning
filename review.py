@@ -8,7 +8,6 @@ import pickle
 import sys
 import os
 import glob
-import plotlib
 import numpy as np
 import pandas as pd
 from collections import Counter
@@ -91,6 +90,22 @@ def percent_above(field, thres, min_pixels):
 
 
 def main():
+
+    fname = 'datasets/ins_2006.npy'
+    ins = np.load(fname)
+    # step through samples
+    print(ins.shape)  
+    idx=0
+    for sample in ins:
+        indices = np.arange(0,ins.shape[3],1)
+        for i in indices:
+            print(sample[:,:,i].max())
+        idx+=1
+        if idx > 5: 
+            sys.exit()
+
+
+'''
     fname_list = get_interesting_pickles()
     for fname in fname_list:
         r = open_pickle(fname)
@@ -105,14 +120,6 @@ def main():
         except: 
             print('divide by zero')
     plot_interesting_pickles()
-    # skip the intersting loop writing for later
-    #fname = fname_list[0]
-    #res = util.open_pickle(fname)
-    #y_true, y_pred = get_images(fname)
-    #scaler = op('scaler_MSE_1.pkl')[0]  # replace with fname
-    # returns a list of [POD, FAR, bias, and CSI
-    #container = stat(y_true, y_pred, scaler)
-    #print(container)
-
+'''
 if __name__ == '__main__':
     main()

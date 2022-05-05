@@ -17,7 +17,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
-from metrics import myMED, POD, FAR
+from metrics import *
 #from helper_functions import mean_iou, dice_coef, dice_coef,loss, compute_iou
 binary=False
 mse=True
@@ -25,7 +25,7 @@ mse=True
 print(tf.__version__)
 
 
-def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
+def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
          lambda_regularization=None, dropout=None,
          activation='relu'):
     '''
@@ -39,7 +39,7 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
     '''
 
     def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
-    activation = lrelu       
+#    activation = lrelu       
 
     # used to store high-res tensors for skip connections to upsampled tensors
     # (The Strings in the Net)
@@ -53,7 +53,6 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
 
         # downsampling loop
     for idx, f in enumerate(filters[:-1]):
-        print(tensor)
         tensor = Convolution2D(f,
                                kernel_size=(3, 3),
                                padding='same',
@@ -64,7 +63,6 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                                activation=activation)(tensor)
 
     # with downsampling swing finisor = BatchNormalization()(tensor)
-        print(tensor)
         tensor = Convolution2D(filters[idx + 1],
                                kernel_size=(3, 3),
                                padding='same',
@@ -78,7 +76,6 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
         tensor = BatchNormalization()(tensor)
 
         tensor_list.append(tensor)  # for use in skip
-        print(tensor_list)
 
         tensor = AveragePooling2D(
             pool_size=(
@@ -92,7 +89,6 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                            bias_initializer='zeros',
                            kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
-    print(tensor)
     tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[-1],
                            kernel_size=(3, 3),
@@ -102,16 +98,14 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
                            bias_initializer='zeros',
                            kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
-    print(tensor)
     tensor = BatchNormalization()(tensor)
     # upsampling loop
-    print(list(reversed(filters[:-1])))
     for idx, f in enumerate(list(reversed(filters[:-1]))):
-        print("before upsampling", tensor)
         tensor = UpSampling2D(size=2)(tensor)  # increase dimension
-        print("After upsampling", tensor)
-        tensor = Add()([tensor, tensor_list.pop()])  # skip connection
-        print("after concatenation", tensor)
+        if junction == 'Add':
+            tensor = Add()([tensor, tensor_list.pop()])  # skip connection
+        else:
+            tensor = Concatenate()([tensor, tensor_list.pop()])
         tensor = Convolution2D(f,
                                kernel_size=(3, 3),
                                padding='same',
@@ -163,10 +157,16 @@ def UNet(input_shape, loss='MSE', nclasses=2, filters=[16, 32],
             metrics=tf.keras.metrics.RootMeanSquaredError())
     if loss == 'MSE_fancy':
         model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-            metrics=[tf.keras.losses.MeanSquaredError(),POD,FAR])
+            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20),FAR(20)])
     if loss == 'MED':
-        model.compile(loss=myMED, optimizer=opt,
-            metrics=tf.keras.metrics.RootMeanSquaredError())
+        model.compile(loss=myMED(20), optimizer=opt,
+            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
+    if loss == 'MSE_plus_MED':
+        model.compile(loss=MSE_plus_MED(20), optimizer=opt,
+            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
+    if loss == 'samplewise_RMSE':
+        model.compile(loss=samplewise_RMSE, optimizer = opt,
+            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
     if binary:
         model.compile(tf.keras.losses.BinaryCrossentropy(), 
                   metrics=tf.keras.metrics.TruePositives(thresholds=[0.3,0.5,0.7]),

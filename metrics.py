@@ -8,38 +8,26 @@ from tensorflow.keras.layers import Concatenate, Dense
 def to_tensor(a):
     return tf.convert_to_tensor(a, dtype=tf.float32)
 
-def find_coordinates_tensor(A):
-    # returns a tensor of coordinates of nonzero elements in A
-    coord_A = []
-    length = 60 # or set equal to the square root of the second dimension of shape
-    A = np.reshape(A,(length,length))
-    for i in range(length):
-        for j in range(length):
-            # make tensor of ones of length length
-            row = tf.ones(length)
-            # set all but index i of row to 0
-            row = tf.where(tf.equal(row,i),1.0,0.0)
-            col = tf.ones(length)
-            col = tf.where(tf.equal(col,j),1.0,0.0)
-            # multiply row by A by col to get a scalar value
-            val = tf.reduce_sum(row*A*col)
-
-    return coord_A
-
-def find_coordinates_numpy(A):
-    coord_A = []
-    length = 8# or set equal to the square root of the second dimension of shape
-    for idx in A:
+def find_coordinates_numpy(points):
+    # Take in tensor of points (flattened)
+    # Return list of 2D coords
+    if tf.equal(tf.size(points), 0):
+        return 0
+    coord = []
+    length = 60# or set equal to the square root of the second dimension of shape
+    for idx in points:
         i = idx//length
         j = idx % length 
-        coord_A.append([i,j])
-    return coord_A
+        coord.append([i,j])
+    return coord
     
 def find_mean_distance(coord_A, coord_B):
     # returns a tensor of coordinates of nonzero elements in A
-    coord_A = find_coordinates_tensor(A)
-    coord_B = find_coordinates_tensor(B)
-    point = coord_A[0] 
+    # Calculates MED(A,B)
+    try:
+        point = coord_A[0] 
+    except:
+        return 0
     distances = []
     for coord in coord_B:
         distances.append(np.linalg.norm(np.subtract(coord,point)))
@@ -51,20 +39,67 @@ def myMED(cutoff=20):
         # Either maxpool or limit domain size or threshold by high val to reduce computation
         target_tensor = tf.cast(tf.where(y_true<cutoff,0.0,1.0),tf.float32)
         prediction_tensor = tf.cast(tf.where(y_pred<cutoff,0.0,1.0),tf.float32)
-        target_tensor = tf.reshape(target_tensor, (tf.shape(target_tensor)[0], -1))
-        prediction_tensor = tf.reshape(prediction_tensor, (tf.shape(prediction_tensor)[0], -1))
+        target_tensor = tf.reshape(target_tensor, (tf.shape(target_tensor)[0], -1)).numpy()
+        prediction_tensor = tf.reshape(prediction_tensor, (tf.shape(prediction_tensor)[0], -1)).numpy()
         MED = 0
         for idx, sample in enumerate(target_tensor):
             points_A = tf.where(sample).numpy() # get indices of nonzero elements and convert to numpy
             points_B = tf.where(prediction_tensor[idx]).numpy()
             coord_A = find_coordinates_numpy(points_A) # get coordinates of nonzero elements on 2D grid
             coord_B = find_coordinates_numpy(points_B)
-            try:
+            if coord_A != 0 and coord_B != 0:
+                print('Coordinates are present, calculating MED')
                 MED = MED + find_mean_distance(coord_A,coord_B)
-            except IndexError:
-                MED = MED + 0
+                print('MED {}'.format(MED))
+            elif coord_A == 0 and coord_B != 0:
+                MED = MED + K.sqrt(tf.math.reduce_mean(tf.square(y_true - y_pred), axis = [1]))
+                print('A completely below threshold with {}'.format(MED))
+            elif coord_A != 0 and coord_B == 0:
+                MED = MED + K.sqrt(tf.math.reduce_mean(tf.square(y_true - y_pred), axis = [1]))
+                print('B completely below threshold with {}'.format(MED))
+            else:
+                MED = MED + K.sqrt(tf.math.reduce_mean(tf.square(y_true - y_pred), axis = [1]))
+                print('Triggered else clause with {}'.format(MED))
+            #except IndexError:
+            #    print('index errror')
+            #    MED = MED + 0
         return MED
     return mean_error_distance
+
+def MSE_plus_MED(cutoff=25.4):
+    def loss_function(y_true, y_pred):
+        MSE = tf.math.reduce_mean(tf.square(y_true - y_pred))
+        target_tensor = tf.reshape(y_true, (tf.shape(y_true)[0], -1)).numpy() # reshape for sample-wise 
+        prediction_tensor = tf.reshape(y_pred, (tf.shape(y_pred)[0], -1)).numpy()
+       # MSE = K.sqrt(tf.math.reduce_mean(tf.square(target_tensor - prediction_tensor), axis = [1])) # calculate sample-wise MSE
+        # hard discretization 
+        target_tensor = tf.cast(tf.where(target_tensor<cutoff,0.0,1.0),tf.float32)
+        prediction_tensor = tf.cast(tf.where(prediction_tensor<cutoff,0.0,1.0),tf.float32)
+        # Now calculate MED 
+        MED = 0 # initialize MED
+        for idx, sample in enumerate(target_tensor):
+            points_A = tf.where(sample).numpy() # get indices of nonzero elements and convert to numpy
+            points_B = tf.where(prediction_tensor[idx]).numpy()
+            coord_A = find_coordinates_numpy(points_A) # get coordinates of nonzero elements on 2D grid
+            coord_B = find_coordinates_numpy(points_B)
+            if coord_A != 0 and coord_B != 0:
+                print('Coordinates are present, calculating MED')
+                MED = MED + find_mean_distance(coord_A,coord_B)
+                print('MED {}'.format(MED))
+            if coord_A != 0 and coord_B == 0: # check for all FNs in B
+                # mupltiply by constant loss * number of FNs 
+                MED = MED + 5 # for now, just add a constant if B == 0
+            else:
+                MED = MED + 0 # if A is below threshold, just use MSE (i.e. MED = 0)
+        return MSE + MED
+    return loss_function
+
+def samplewise_RMSE(y_true, y_pred):
+    # from CIRA guide
+    y_true = tf.reshape(y_true, [tf.shape(y_true)[0], -1])
+    y_pred = tf.reshape(y_pred, [tf.shape(y_true)[0], -1])
+    return K.sqrt( tf.math.reduce_mean(tf.square(y_true - y_pred), axis=[1]))        
+
 
 #def hausdorf(y_true, y_pred):
     # get max distance between A and B

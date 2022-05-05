@@ -69,25 +69,31 @@ def create_parser():
     parser.add_argument(
         '-steps',
         type=int,
-        default=10,
+        default=20,
         help='Steps per epoch')
     parser.add_argument(
         '-filters',
         type=int,
         default=[
             32,
-            64],
+            64,
+            128
+            ],
         help='Enter the number of filters for convolutional network')
     parser.add_argument(
         '-junction',
         type=str,
-        default='Add',
         help='Enter either Add or Concat to specify skip connection junction')
     parser.add_argument(
         '-loss',
         type=str,
         default='MSE',
         help='Enter a loss function (MSE, MED, etc')
+    parser.add_argument(
+        '-unet_type',
+        type=str,
+        default='add',
+        help='Enter whether to concatenate or add during skips in unet')
     parser.add_argument(
         '-results_path',
         type=str,
