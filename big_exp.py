@@ -281,7 +281,7 @@ history = model.fit(x=generator,
                     callbacks=[early_stopping_cb])
 
 results = {}
-results['true_outs'] = outs
+#results['true_outs'] = outs
 results['predict_training'] = model.predict(ins_train)
 results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
 results['true_training'] = outs_train
