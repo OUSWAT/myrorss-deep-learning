@@ -10,24 +10,27 @@ import sys
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
-from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, Dropout, BatchNormalization
+# import layers from keras like RandomContrast
+from tensorflow.keras.layers import RandomContrast, RandomRotation, RandomZoom, RandomFlip, CenterCrop
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, Dropout, BatchNormalization, SpatialDropout2D, RandomTranslation
 from tensorflow.keras.layers import Convolution2D, Dense, MaxPooling2D, Flatten, BatchNormalization, Dropout, Concatenate, Input, UpSampling2D, Add
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
 from tensorflow import keras
-from metrics import *
+#from customs import *
 #from helper_functions import mean_iou, dice_coef, dice_coef,loss, compute_iou
 binary=False
 mse=True
 
-print(tf.__version__)
+tf.config.run_functions_eagerly(True)
 
-
-def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
-         lambda_regularization=None, dropout=None,
-         activation='relu'):
+def UNet(input_shape,loss, batch_size=512, lrate=0.0003,dropout=None, lambda_regularization=None, filters=[16, 32],
+         junction='Add', nclasses=1, constant_loss=None,activation='relu', 
+         preprocessing=[True,False,False,False,False,False,False,False,False,True]):
     '''
     Builds a UNet using for loops.
 
@@ -37,20 +40,34 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                     Consider changing this. Can this loop reproduce typical filter-progression for UNets?
     @param activation: pick any activation function within the keras API
     '''
-
-    def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
-#    activation = lrelu       
-
-    # used to store high-res tensors for skip connections to upsampled tensors
-    # (The Strings in the Net)
-    tensor_list = []
+    if activation == 'lrelu':
+        def lrelu(x): return tf.keras.activations.relu(x, alpha=0.1)
+        activation = lrelu
+           
+    
     # input images from sample as a tensor
     input_tensor = Input(shape=input_shape, name="input")
-    # prevents overfitting by normalizing for each batch, i.e. for each batch
+    # Preprocessing here 
+    # use boolean list to turn on/off preprocessing layers like RandomContrast, RandomRotation, etc.
+    factor = 0.3
+    if preprocessing[0]:
+        input_tensor = RandomTranslation(height_factor=factor,width_factor=factor,fill_mode='constant') (input_tensor)
+    if preprocessing[1]:
+        input_tensor = RandomContrast(factor,factor) (input_tensor)
+    if preprocessing[2]:
+        input_tensor = RandomRotation(factor,factor) (input_tensor)
+    if preprocessing[3]:
+        input_tensor = RandomZoom(factor,factor) (input_tensor)
+    if preprocessing[4]:
+        input_tensor = RandomSizedCrop(factor,factor) (input_tensor)
+    if preprocessing[5]:
+        input_tensor = RandomFlip(factor) (input_tensor)
+    if preprocessing[6]:
+        input_tensor = GaussianNoise(factor) (input_tensor)
+
     # of samples
     tensor = BatchNormalization()(input_tensor)
-    tensor = GaussianNoise(0.1)(tensor)
-
+    tensor_list = []
         # downsampling loop
     for idx, f in enumerate(filters[:-1]):
         tensor = Convolution2D(f,
@@ -61,7 +78,9 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                                bias_initializer='zeros',
                                kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
-
+        if dropout is not None:
+            tensor = SpatialDropout2D(dropout)(tensor)
+        tensor = BatchNormalization()(tensor)
     # with downsampling swing finisor = BatchNormalization()(tensor)
         tensor = Convolution2D(filters[idx + 1],
                                kernel_size=(3, 3),
@@ -72,11 +91,9 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                                kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
         if dropout is not None:
-            tensor = Dropout(dropout)(tensor)
+            tensor = SpatialDropout2D(dropout)(tensor)
         tensor = BatchNormalization()(tensor)
-
         tensor_list.append(tensor)  # for use in skip
-
         tensor = AveragePooling2D(
             pool_size=(
                 2, 2), strides=(
@@ -89,6 +106,8 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                            bias_initializer='zeros',
                            kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
+    if dropout is not None:
+        tensor = SpatialDropout2D(dropout)(tensor)
     tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[-1],
                            kernel_size=(3, 3),
@@ -98,6 +117,8 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                            bias_initializer='zeros',
                            kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
+    if dropout is not None:
+        tensor = SpatialDropout2D(dropout)(tensor)
     tensor = BatchNormalization()(tensor)
     # upsampling loop
     for idx, f in enumerate(list(reversed(filters[:-1]))):
@@ -114,6 +135,8 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                                bias_initializer='zeros',
                                kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
+        if dropout is not None:
+            tensor = SpatialDropout2D(dropout)(tensor)
         tensor = BatchNormalization()(tensor)
         tensor = Convolution2D(f,
                                kernel_size=(3, 3),
@@ -123,6 +146,8 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                                bias_initializer='zeros',
                                kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                                activation=activation)(tensor)
+        if dropout is not None:
+            tensor = SpatialDropout2D(dropout)(tensor)
         tensor = BatchNormalization()(tensor)
     tensor = Convolution2D(filters[0],
                            kernel_size=(3, 3),
@@ -133,48 +158,67 @@ def UNet(input_shape,junction='Add', loss='MSE', nclasses=2, filters=[16, 32],
                            kernel_regularizer=tf.keras.regularizers.l2(lambda_regularization),
                            activation=activation)(tensor)
 
-    output_tensor = Convolution2D(1,
-                                  kernel_size=(1, 1),
-                                  padding='same',
-                                  use_bias=True,
-                                  kernel_initializer='random_uniform',
-                                  bias_initializer='zeros',
-                                  kernel_regularizer=None,
-                                  activation=activation, name='output')(tensor)
+    logits = Convolution2D(1,
+                           kernel_size=(1, 1),
+                           padding='same',
+                           use_bias=True,
+                           kernel_initializer='random_uniform',
+                           bias_initializer='zeros',
+                           kernel_regularizer=None,
+                           activation=activation, name='output')(tensor)
+    
+    targets = keras.Input(shape=(60,60,1), name='targets')
+   
+    if loss != 'mse':
+        predictions = G_Beta(name='predictions')(logits, targets)
+    else:
+        predictions = MSE_layer(name='predictions')(logits, targets)
 
-    opt = keras.optimizers.Adam(
-        lr=0.0001,
+    opt = tf.keras.optimizers.Adam(
+        lr=lrate,
         beta_1=0.9,
         beta_2=0.999,
         epsilon=None,
         decay=0.0,
         amsgrad=False)
 
-    model = Model(inputs=input_tensor, outputs=output_tensor)
-    
-    if loss == 'MSE':
-        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-            metrics=tf.keras.metrics.RootMeanSquaredError())
-    if loss == 'MSE_fancy':
-        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20),FAR(20)])
-    if loss == 'MED':
-        model.compile(loss=myMED(20), optimizer=opt,
-            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
-    if loss == 'MSE_plus_MED':
-        model.compile(loss=MSE_plus_MED(20), optimizer=opt,
-            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
-    if loss == 'samplewise_RMSE':
-        model.compile(loss=samplewise_RMSE, optimizer = opt,
-            metrics=[tf.keras.metrics.RootMeanSquaredError(),POD(20)],run_eagerly=True)
-    if binary:
-        model.compile(tf.keras.losses.BinaryCrossentropy(), 
-                  metrics=tf.keras.metrics.TruePositives(thresholds=[0.3,0.5,0.7]),
-                  optimizer=opt)
+    model = Model(inputs=[input_tensor,targets], outputs=predictions)
+    model.compile(optimizer=opt)    
 
-    # model.compile(loss=custom,optimizer=opt,metrics=['mse'])
     return model
 
 def create_UNetPlusPlus():
     # TBD
     pass
+
+def my_custom_MSE():
+    def inner(y_true, y_pred):
+        return tf.math.reduce_mean(tf.square(y_true - y_pred))
+    return inner
+
+def my_POD(cutoff=25.4):
+    # computes the probability of detection
+    # POD = PT / TP + FN
+    def pod(y_true, y_pred):
+        y_true = tf.where(y_true>cutoff,1,0)
+        y_pred = tf.where(y_pred>cutoff,1,0)
+     
+        TP = tf.math.reduce_sum(tf.where(((y_true-1)+y_pred)<1,0,1))
+        FN = tf.math.reduce_sum(tf.where(y_true-y_pred<1,0,1))
+        FP = tf.math.reduce_sum(tf.where(y_pred-y_true<1,0,1))
+        return TP/(TP+FN)
+    return pod
+
+class MSE_layer(keras.layers.Layer):
+    def __init__(self, name='Gbeta_loss'):
+        super(MSE_layer, self).__init__(name=name)
+        self.loss_fn = my_custom_MSE()
+        self.POD_fn = my_POD(20)
+
+    def call(self, y_true, y_pred, sample_weights=None):
+        loss = self.loss_fn(y_true, y_pred)
+        self.add_loss(loss)
+
+        # log the metric
+        POD = self.POD_fn(y_true, y_pred)
+        return tf.keras.activations.relu(y_pred,alpha=0.1)
