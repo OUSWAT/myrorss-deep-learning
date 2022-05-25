@@ -13,9 +13,6 @@ import keras
 import tensorflow_probability as tfp
 import scipy.interpolate as interp
 
-def to_tensor(a):
-    return tf.convert_to_tensor(a, dtype=tf.float32)
-# write custom model to make use of gradient tape
 class CustomModel(keras.Model):
     def train_step(self, data):
         x, y = data
@@ -34,20 +31,33 @@ class CustomModel(keras.Model):
         # return a dict mapping metric names to current value
         return {m.name: m.result() for m in self.metrics}
 
-class custom_model(keras.Model):
-    def train_step(self, data):
-        x, y = data
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)
-            loss = G_beta_IL()
-            loss_value = loss(y, y_pred)
-        
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss_value, trainable_vars)
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        self.compiled_metrics.update_state(y, y_pred)
-        # return a dict mapping metric names to current value
-        return {m.name: m.result() for m in self.metrics}
+class G_beta_layer(keras.layers.Layer):
+    def __init__(self, name='Gbeta_loss'):
+        super(G_beta_layer, self).__init__(name=name)
+        self.loss_fn = G_beta_IL()
+        self.POD_fn = my_POD(20)
+    
+    def call(self, y_true, y_pred, sample_weights=None):
+        loss = self.loss_fn(y_true, y_pred, sample_weights)
+        self.add_loss(loss)
+
+        # log the metric
+        POD = self.POD_fn(y_true, y_pred)
+        return tf.keras.activations.relu(y_pred,alpha=0.1)
+
+class MSE_layer(keras.layers.Layer):
+    def __init__(self, name='Gbeta_loss'):
+        super(MSE_layer, self).__init__(name=name)
+        self.loss_fn = my_custom_MSE()
+        self.POD_fn = my_POD(20)
+
+    def call(self, y_true, y_pred, sample_weights=None):
+        loss = self.loss_fn(y_true, y_pred)
+        self.add_loss(loss)
+
+        # log the metric
+        POD = self.POD_fn(y_true, y_pred)
+        return tf.keras.activations.relu(y_pred,alpha=0.1)
 
 def find_mean_distance(coord_A, coord_B): 
     n_coord = len(coord_A)
@@ -114,31 +124,8 @@ def G_beta(A, B, beta=12960000):
     G_beta_loss_value = max(1-y/beta, 0.0)
     return -G_beta_loss_value
 
-def G_beta_loss(y_true, y_pred):
-    # make cutoff low at low epoch and then increase over time?
-    # uses MSE as base loss, then adds (negative) gbeta
-    cutoff=20
-    beta =12960000 # N^2
-    y_true = tf.reshape(y_true, (tf.shape(y_true)[0],-1))
-    y_pred = tf.reshape(y_pred, (tf.shape(y_pred)[0], -1))
-    loss_value = tf.math.reduce_mean(tf.square(y_true - y_pred))
-    gbeta_list = []
-    intensity_list = []
-    #loss_value = tf.constant([0])
-    #l = tf.cast(0, dtype=tf.float32)
-    for true, pred in zip(y_true, y_pred): 
-        # Interpolate and compute sorted correlation coefficient
-        true_binary, pred_binary = Lambda(binarize(true, pred))
-        gbeta = tf.cast(G_beta(true, pred, beta=beta), dtype=tf.float32)
-        gbeta = -tf.cast(gbeta, dtype=tf.float32)
-        loss_value+= gbeta
-    return loss_value
-
 def flatten_tensor(y_true, y_pred):
     return tf.stop_gradient(tf.cast(tf.reshape(y_true, (tf.shape(y_true)[0], -1)), dtype=tf.float32).numpy()), tf.stop_gradient(tf.cast(tf.reshape(y_pred, (tf.shape(y_pred)[0], -1)),dtype=tf.float32).numpy())
-
-def scheduler(epoch, lr):
-    pass
  
 def my_POD(cutoff=25.4):
     # computes the probability of detection
@@ -147,7 +134,6 @@ def my_POD(cutoff=25.4):
         y_true, y_pred = binarize(y_true, y_pred, cutoff=cutoff)
         TP = tf.math.reduce_sum(tf.where(((y_true-1)+y_pred)<1,0,1))
         FN = tf.math.reduce_sum(tf.where(y_true-y_pred<1,0,1))
-        FP = tf.math.reduce_sum(tf.where(y_pred-y_true<1,0,1))
         return TP/(TP+FN)
     return pod
 
@@ -155,13 +141,14 @@ def my_FAR(cutoff=25.4):
     def far(y_true, y_pred, cutoff=cutoff):
         y_true, y_pred = binarize(y_true, y_pred, cutoff=cutoff)
         TP = tf.math.reduce_sum(tf.where(((y_true-1)+y_pred)<1,0,1))
-        FN = tf.math.reduce_sum(tf.where(y_true-y_pred<1,0,1))
         FP = tf.math.reduce_sum(tf.where(y_pred-y_true<1,0,1))
         return FP/(TP+FP)
     return far
 
-def my_custom_MSE(y_true, y_pred):
-    return tf.math.reduce_mean(tf.square(y_true - y_pred))
+def my_custom_MSE():
+    def inner(y_true, y_pred):
+        return tf.math.reduce_mean(tf.square(y_true - y_pred))
+    return inner
 
 def Delta_with_contours(y_true, y_pred):
     # Find baddeley's delta metric with contours
@@ -189,7 +176,7 @@ def Delta_with_contours(y_true, y_pred):
             w_x_A = w(mindist_A) # cutoff
             w_x_B = w(mindist_B)
             sums = sums + abs(w_x_A - w_x_B)
-        delta+=sums/3600
+        delta+=sums/3600 # 3600 is the number of pixels in the raster
     return tf.cast(delta, tf.float32)
 
 def get_coordinates(true, pred):
@@ -198,11 +185,6 @@ def get_coordinates(true, pred):
     coord_A = find_coordinates(points_A,length=60) # get coordinates of nonzero elements on 2D grid
     coord_B = find_coordinates(points_B,length=60)
     return coord_A, coord_B
-
-def binarize(true, pred, cutoff=25):
-    true = tf.where(true<cutoff,0.0,1.0)
-    pred = tf.where(pred<cutoff,0.0,1.0)
-    return true, pred
 
 def Hausdorff(cutoff=25.4, constant_loss=1):
     # get max distance between A and B
@@ -229,7 +211,6 @@ def Hausdorff(cutoff=25.4, constant_loss=1):
         print(type(loss))
         return loss
     return mse_plus_maxdist
-
 
 def PHD_k(cutoff=25.4, constant_loss=20, k=10):
     # Partial Hausdorff Distance (kth)
@@ -295,32 +276,6 @@ def samplewise_RMSE(y_true, y_pred):
     y_pred = tf.reshape(y_pred, [tf.shape(y_true)[0], -1])
     return K.sqrt( tf.math.reduce_mean(tf.square(y_true - y_pred), axis=[1]))        
 
-
-def get_model():
-    # simple model
-    inputs = keras.Input(shape=(32,))
-    outputs = keras.layers.Dense(1)(inputs)
-    model = keras.Model(inputs, outputs)
-    model.compile(optimizer="adam", loss="mean_squared_error")
-    return model
-
-def main():
-    a = [0,3,6,9,12,15,18,21]
-    b = [4,8,12,16,20]
-    #f = interp1d(a,b)
-    #f2 = interp1d(a,b,kind='cubic')
-    #print(f)
-    #print(f2)
-    model = get_model()
- 
-    loaded_1 = keras.models.load_model("my_model", custom_objects={"Custom_loss": G_beta_loss})
-
-    test_input = np.random.random((128, 32))
-    test_target = np.random.random((128, 1))
-    
-    model.fit(test_input, test_target)
-
-
 def G_beta_IL(batch_size=512, omega=0.2):
     #rewrite inner_G_beta_IL to handle non-differentiable functions
     def inner_G_beta_IL(y_true, y_pred):
@@ -337,9 +292,6 @@ def G_beta_IL(batch_size=512, omega=0.2):
             pred_nonzero = tf.stop_gradient(pred.numpy()[pred.numpy()>5])
             true_nz_np = np.array(true_nonzero.numpy())
             pred_nz_np = np.array(pred_nonzero.numpy())
-            print(repr(true_nz_np)) 
-            print('\n\n\n\n\n\n\n\n <')
-            print(repr(pred_nz_np))
             N_true = tf.stop_gradient(np.count_nonzero(true_nonzero))
             N_pred = tf.stop_gradient(np.count_nonzero(pred_nonzero))
             if np.greater(N_true,N_pred): min_N = N_pred
@@ -356,18 +308,10 @@ def G_beta_IL(batch_size=512, omega=0.2):
                 pred_interp_func = interp.interp1d(np.arange(N_pred), pred_nonzero, bounds_error=False)
                 true_interp = tf.stop_gradient(np.sort(true_interp_func(np.linspace(0,tf.math.subtract(N_true,1),min_N))))# interpolate to smaller
                 pred_interp = tf.stop_gradient(np.sort(pred_interp_func(np.linspace(0,tf.math.subtract(N_pred,1),min_N))))
-                print(f'{true_interp} with shape true {true_interp.shape}')
-                print(f'{pred_interp} with shape pred {pred_interp.shape}')
                 # get the covariance of the interpolated versions using Lambda layer
                 covar = tf.negative(tf.stop_gradient(np.cov(true_interp, pred_interp)[0][1])) # make it negative so that high covariance lessens the loss value
-                # calculate the intensity loss
-                print(covar)
                 intensity_value = tf.stop_gradient(covar/np.dot(np.std(true_interp),np.std(pred_interp)))
                 # calculate the final loss
-                print(gbeta)
-                print(intensity_value)
-                if idx >= 1:
-                    break
                 loss_value += tf.cast(tf.cast(omega*gbeta,dtype=tf.float32) + tf.cast((1 - omega)*intensity_value,dtype=tf.float32),dtype=tf.float32) # cast as float 32s then cast again as float32s before casting one last time as float32s :check:
         print(loss_value)
         return loss_value
@@ -383,6 +327,3 @@ def get_nonzero_and_min(true, pred,cutoff=25):
     if N_true > N_pred: min_N = N_pred
     else: min_N = max(0,N_true)
     [tf.ragged.constant(tf.cast(x, dtype=tf.float32)).numpy() for x in [true_nz, pred_nz, min_N]]
-
-if __name__ == '__main__':
-    main()
