@@ -12,78 +12,42 @@ import datetime
 import matplotlib.pyplot as plt
 from numpy.random import default_rng
 #rng = default_rng()
-multi_fields = [
-    'MergedLLShear_Max_30min',
-    'MergedLLShear_Min_30min',
-    'MergedMLShear_Max_30min',
-    'MergedMLShear_Min_30min',
-    'MergedReflectivityQC',
-    'MergedReflectivityQCComposite_Max_30min',
-    'Reflectivity_0C_Max_30min',
-    'Reflectivity_-10C_Max_30min',
-    'Reflectivity_-20C_Max_30min',
-    'target_MESH_Max_30min']
-NSE_fields = [
-    'MeanShear_0-6km',
-    'MUCAPE',
-    'ShearVectorMag_0-1km',
-    'ShearVectorMag_0-3km',
-    'ShearVectorMag_0-6km',
-    'SRFlow_0-2kmAGL',
-    'SRFlow_4-6kmAGL',
-    'SRHelicity0-1km',
-    'SRHelicity0-2km',
-    'SRHelicity0-3km',
-    'UWindMean0-6km',
-    'VWindMean0-6km',
-    'Heightof0C',
-    'Heightof-20C',
-    'Heightof-40C']
-products = multi_fields
-degrees = [
-    '00.50',
-    '  01.00',
-    '  01.50',
-    '  02.00',
-    '  03.00',
-    '  04.50',
-    '  06.00',
-    '  07.50',
-    '  09.00 ',
-    ' 11.00',
-    '  13.00',
-    '  15.00 ',
-    ' 17.00',
-    ' 00.75',
-    ' 01.25',
-    ' 01.75',
-    ' 02.75',
-    ' 04.00 ',
-    ' 05.00 ',
-    ' 07.00  ',
-    '08.50  ',
-    '10.00',
-    ' 12.00',
-    ' 14.00',
-    ' 16.00',
-    '20.00']
-features = products + degrees
+from itertools import product
 
-DATA_HOME = '/condo/swatcommon/common/myrorss'
-TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
-HOME_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
-
-def unnamed_function1():
-    # no-name
-    for idx, n in enumerate(nlist2):
-        if int(n) > 2000:
-            sort2.append(int(n))
-        if int(nlist1[idx]) > 2000:
-            sort1.append(int(nlist1[idx]))
+def cartesian_product(list_of_nums):
+    pass    
 
 def clear():
     # clear screen
     os.system('clear')
+
+def move_netcdfs_back_one_dir(year):
+    # for each storm, move the netcdfs in target_MESH_Max_30min back one directory
+    list_of_paths_to_storms_in_year = glob.glob(f'{s.data_path}/{year}/20*/storm*') 
+    for path in list_of_paths_to_storms_in_year:
+        list_of_paths_to_netcdfs_in_storm = glob.glob(f'{path}/target_MESH_Max_30min/**/**/*.netcdf')
+        for path_to_netcdf in list_of_paths_to_netcdfs_in_storm:
+            # get path to target_MESH_Max_30min
+            path_to_target_MESH_Max_30min = path_to_netcdf.split('/')[:-1]
+            # join path to target_MESH_Max_30min on '/'
+            path_to_target_MESH_Max_30min_subdir = '/'.join(path_to_target_MESH_Max_30min)
+            # get netcdf file 
+            netcdf_file = path_to_netcdf.split('/')[-1]
+            # save netcdf_file in path_to_target_MESH_Max_30min_subdir
+            os.rename(path_to_netcdf, f'{path_to_target_MESH_Max_30min_subdir}/{netcdf_file}')
+        # do the same for NSE files
+        list_of_paths_to_netcdfs_in_storm = glob.glob(f'{path}/NSE/**/**/*.netcdf')
+        for path_to_netcdf in list_of_paths_to_netcdfs_in_storm:
+            # get path to NSE
+            path_to_NSE = path_to_netcdf.split('/')[:-1]
+            # join path to NSE on '/'
+            path_to_NSE_subdir = '/'.join(path_to_NSE)
+            # get netcdf file 
+            netcdf_file = path_to_netcdf.split('/')[-1]
+            # save netcdf_file in path_to_NSE_subdir
+            os.rename(path_to_netcdf, f'{path_to_NSE_subdir}/{netcdf_file}')
+    return None
+
 
 def load():
     # return ins, outs
