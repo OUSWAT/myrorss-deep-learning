@@ -47,6 +47,9 @@ def load_data_in_year(year='2011',month=None):
     # get list of paths to storm_dfs with more than 10 hail events
     list_of_paths_to_storm_dfs_with_sig_hail = [f for f in list_of_paths_to_storm_dfs_in_year if f.split('/')[7] in dates_with_sig_hail]
     print(list_of_paths_to_storm_dfs_with_sig_hail)
+    if list_of_paths_to_storm_dfs_with_sig_hail == []:
+        print(dates_with_sig_hail)
+        print(list_of_paths_to_storm_dfs_in_year)
     for path_to_storm_df in list_of_paths_to_storm_dfs_with_sig_hail:
         try:
             df = pd.read_feather(path_to_storm_df)
@@ -85,13 +88,13 @@ def load_data_in_year(year='2011',month=None):
                 continue
     return ins_full, outs_full
 
-def load_data_with_netcdf_list(list_of_netcdf_files):
+def load_data_with_netcdf_list(list_of_netcdf_files,fields=s.multi_fields+s.targets+s.degrees):
     ins = []
     outs = []
     if not list_of_netcdf_files:
         print(f'No files')
         return False   
-    valid_fields = make_dict(s.multi_fields + s.targets + s.degrees) # valid fields is True if the field has not been added to inputs or outputs
+    valid_fields = make_dict(fields) # valid fields is True if the field has not been added to inputs or outputs
     # step through valid_fields, then find the netcdfs that have the field, then add to inputs or outputs
     for field in valid_fields:
         # get all files with field in name
@@ -136,7 +139,35 @@ def load_data_with_netcdf_list(list_of_netcdf_files):
         true_keys = [x for x in valid_fields.keys() if valid_fields[x] == True]
         print(f'Missing the following keys: {true_keys}')
         return [], []
-    
+   
+def load_field_on_day(field='target_MESH_Max_30min',date='20110409'):
+    # Given a field and day, load into an npy 
+    var_list = []
+    storm_df = pandas.read_feather(f'{s.data_path}/{date[:4]}/{date}/csv/storms.feather') 
+    df_True = df[df['is_Storm']==True]
+    indices = [x for x in df_True['index'].tolist()]
+    for idx in indices:
+        path_to_storm = f'{date_path}/{date}/storm{str(idx).zfill(4)}'
+        pattern_to_var = f'{path_to_storm}/{field}/**/*.netcdf'
+        patterns = (pattern_to_var)
+        files_to_netcdfs = []
+        for pattern in patterns:
+            files_to_netcdfs.extend(glob.glob(pattern))
+        if not files_to_netcdfs:
+            continue
+        try:
+            ins, outs = load_data_with_netcdf_list(files_to_netcdfs)
+            if not ins or not outs:
+                continue
+            ins_full.append(ins)
+            outs_full.append(outs)
+        except Exception as e:
+            print(e)
+            print(f'Error loading {path_to_storm}')
+            continue
+    return ins_full, outs_full
+
+
 def check_files_for_missing_fields(files, fields):
     valid_fields = make_dict(fields) # valid fields is True if the field has not been added to inputs or outputs
     if not files:
@@ -176,21 +207,43 @@ def check_files_for_missing_fields(files, fields):
         print('F1')
         return False
 
+def dirty_load(date='20110409',file_pattern='storm*/target*/MESH_Max_30min',field='MESH_Max_30min'):
+    var_list = []
+    netcdfs = glob.glob(f'{s.data_path}/{date[:4]}/{date}/{file_pattern}/**/*.netcdf')
+    for netcdf in netcdfs:
+        nc = Dataset(netcdf)
+        var = nc.variables[field][:,:]
+        var = np.where(var<0,0,var)
+        var_list.append(var)
+    return np.asarray(var_list)
+
 def main():
+    var = dirty_load('20070813')
+    np.save('var/20070813.npy',var)
+    #var = dirty_load(file_pattern='MESH/storm*/target*/MESH_Max_30min')
+    exit()
     year = sys.argv[1]
     month = sys.argv[2]
+    if month == 'None':
+        month=None
     choice = sys.argv[3]
     print(f'year {year} with type {type(year)} and choice {choice} with {type(choice)}')
     if choice == 'load':
         ins, outs = load_data_in_year(year,month=month)
+        ins = np.moveaxis(ins, 1, 3)
+        outs = np.moveaxis(outs, 1, 3)
         ins_train, ins_test, outs_train, outs_test = train_test_split(
-                                        ins_train, outs_train, test_size=0.16, random_state=3)
+                                        ins, outs, test_size=0.16, random_state=3)
+        ins_val, ins_test, outs_val, outs_test = train_test_split(
+                                        ins_train, outs_train,size=0.2, random_state=3)
+        
         if month is not None:
             filename = f'dataset_{year}{month}.npz'
-        else: filename = f'dataset_{year}.npz'
+        else: filename = f'datasets/dataset_{year}.npz'
  
-        np.savez(f'{filename}', x_train=ins_train, x_test=ins_test,
-                                        y_train=outs_train, y_test=outs_test)
+        np.savez(f'{filename}', x_train = ins_train, x_test = ins_test,
+                                x_val = ins_val, y_val = outs_val,
+                                y_train = outs_train, y_test = outs_test)
     
 if __name__ == '__main__':
     main()

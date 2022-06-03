@@ -18,6 +18,7 @@ from customs import *
 tf.config.run_functions_eagerly(True) # best for experimental, but slower than graph-mode
 
 def create_parser():
+    # enable command line arguments
     parser = argparse.ArgumentParser(description='Hail Swath Learner')
     parser.add_argument(
         '-batch_size',
@@ -56,34 +57,9 @@ def create_parser():
         help='Enter boolean (T if loading model from memory, F if creating model.')
     return parser
 
-def training_set_generator_images(ins, outs, batch_size=10,
-                                  input_name='input',
-                                  output_name='output'):
-    '''
-    Generator for producing random minibatches of image training samples.
-
-    @param ins Full set of training set inputs (examples x row x col x chan)
-    @param outs Corresponding set of sample (examples x nclasses)
-    @param batch_size Number of samples for each minibatch
-    @param input_name Name of the model layer that is used for the input of the model
-    @param output_name Name of the model layer that is used for the output of the model
-    '''
-    while True:
-        # Randomly select a set of example indices
-        example_indices = random.choices(range(ins.shape[0]), k=batch_size)
-
-        # The generator will produce a pair of return values: one for inputs
-        # and one for outputs
-        yield({input_name: ins[example_indices, :, :, :]},
-              {output_name: outs[example_indices, :, :, :]})
-
 def augment_args(args):
-    # if you specify exp index, it translates that into argument values that
-    # you're overiding
-    '''
-    Use the jobiterator to override the specified arguments based on the experiment index.
-    @return A string representing the selection of parameters to be used in the file name
-    '''
+    # augment args with exp_index
+    # i.e. select a choice from a cartesian product dependent on exp_index (from shell jobcode)
     index = args.exp_index
     if(index == -1):
         return ""
@@ -100,6 +76,7 @@ def augment_args(args):
     return args
 
 def transform(var):
+    # use standard scaler to transform data between 0 and 1
     n_channels = var.shape[3]
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
@@ -117,6 +94,7 @@ def transform(var):
     return tdata_transformed, channel_scalers
 
 def preprocess(dataset, factor = 0.1):
+    # preprocess data for training outside the network layers (before the network)
     # takes tf.Data object as dataset
     dataset = dataset.map(lambda x, y: (RandomTranslation(factor), y))
     dataset = dataset.prefetch(tf.data.AUTOTUNE)

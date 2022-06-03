@@ -14,19 +14,14 @@ from sklearn.model_selection import train_test_split
 import random
 import argparse
 import time
-import numpy as np
-# from tensorflow.python.ops.numpy_ops.np_math_ops import true_divide
 from u_net_loop import *
-from stats import *
 import pickle
 import datetime
 from sklearn.preprocessing import StandardScaler
-#from stats import *
 import tensorflow.keras.backend as K
-#from unet import create_uNet
-import stats
+from job_control import *
 K.set_image_data_format('channels_last')
-
+from customs import *
 supercomputer = True  # See line 138 where paths are set
 swatml = False
 
@@ -44,20 +39,29 @@ def create_parser():
     parser.add_argument(
         '-exp_type',
         type=str,
-        default='l2',
+        default='random_translation',
         help='How to name this model?')
+    parser.add_argument(
+        '-preprocess',
+        default='1000001',
+        help='Binary string instructions for preprocessing layers to use in UNet.')
     parser.add_argument(
         '-batch_size',
         type=int,
         default=256,
         help='Enter the batch size.')
     parser.add_argument(
+        '-loss2',
+        type=str,
+        default=None,
+        help='Enter the second loss function')
+    parser.add_argument(
         '-dropout',
         type=float,
         default=None,
         help='Enter the dropout rate (0<p<1)')
     parser.add_argument(
-        '-lambda_regularization',
+        '-L2',
         type=float,
         default=None,
         help='Enter l1, l2, or none.')
@@ -72,12 +76,22 @@ def create_parser():
         default=10,
         help='Steps per epoch')
     parser.add_argument(
+        '-epochs2',
+        type=int,
+        default=5,
+        help='Enter number of epochs for second training.')
+    parser.add_argument(
         '-filters',
         type=int,
         default=[
             32,
             64],
         help='Enter the number of filters for convolutional network')
+    parser.add_argument(
+        '-factor',
+        type=float,
+        default='0.1',
+        help='Enter factor to be used in preprocessing (i.e. GaussianNoise, RandomTranslation, etc).')
     parser.add_argument(
         '-junction',
         type=str,
@@ -91,7 +105,7 @@ def create_parser():
     parser.add_argument(
         '-results_path',
         type=str,
-        default=RESULTS_PATH,
+        default='results',
         help='Results directory')
     parser.add_argument(
         '-lrate',
@@ -136,36 +150,23 @@ def augment_args(args):
     index = args.exp_index
     if(index == -1):
         return ""
+    if not isinstance(index, int):
+        index = 0
 
-    # Create parameter sets to execute the experiment on.  This defines the Cartesian product
-    #  of experiments that we will be executing
-    # Overides Ntraining and rotation
-    if args.lambda_regularization is not None:
-        p = {'lambda_regularization: [0.0001, 0.005, 0.01]',
-             'activation: ["elu","sigmoid","tanh","relu"]',
-             'optimizer: ["adam","RMSProp","SGD-momentum"]'}
-
-    # Create the iterator
-    ji = JobIterator(p)
-    print("Total jobs:", ji.get_njobs())
-
-    # Check bounds
-    assert (args.exp_index >= 0 and args.exp_index <
-            ji.get_njobs()), "exp_index out of range"
-
-    # Print the parameters specific to this exp_index
-    print(ji.get_index(args.exp_index))
-
-    # Push the attributes to the args object and return a string that describes these structures
-    # destructively modifies the args
-    # string encodes info about the arguments that have been overwritten
-    return ji.set_attributes_by_index(args.exp_index, args)
+    p = {'L2': [0.01, 0.1, 0.3, 0.5],
+         'dropout': [0.1, 0.3, 0.5],
+         'junction': ['Add', 'Concat'],
+         'filters': [[32, 64], [64, 128], [32, 64, 128], [16, 32, 64]]}
+ 
+    cartesian_product = list(dict(zip(p,x)) for x in product(*p.values()))
+    element = cartesian_product[index]
+    for k, v in element.items():
+        setattr(args, k, v)
+    return args
 
 
 def transform(var):
-    print(var.shape)
     n_channels = var.shape[3]
-    print(n_channels)
     tdata_transformed = np.zeros_like(var)
     channel_scalers = []
 
@@ -184,16 +185,6 @@ def transform(var):
 def training_set_generator_images(ins, outs, batch_size=10,
                                   input_name='input',
                                   output_name='output'):
-    '''
-    Generator for producing random minibatches of image training samples.
-
-    @param ins Full set of training set inputs (examples x row x col x chan)
-    @param outs Corresponding set of sample (examples x nclasses)
-    @param batch_size Number of samples for each minibatch
-    @param input_name Name of the model layer that is used for the input of the model
-    @param output_name Name of the model layer that is used for the output of the model
-    '''
-
     while True:
         # Randomly select a set of example indices
         example_indices = random.choices(range(ins.shape[0]), k=batch_size)
@@ -203,106 +194,96 @@ def training_set_generator_images(ins, outs, batch_size=10,
         yield({input_name: ins[example_indices, :, :, :]},
               {output_name: outs[example_indices, :, :, :]})
 
-# Standard MSE loss function plus term penalizing only misses
+def main():
+    # set args and train
+    parser = create_parser()
+    args = parser.parse_args()
+    args = augment_args(args)
 
-if(swatml):
-    strategy = tf.distribute.MirroredStrategy()
-    HOME_PATH = '/home/michaelm/'
-    RESULTS_PATH = '/home/michaelm/results'
-    DATA_HOME = '/home/michaelm/data/'
-elif(supercomputer):
-    HOME_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
-    RESULTS_PATH = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/results'
-    DATA_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning/datasets'
+    dataset = np.load('datasets/dataset_{}.npz'.format(args.ID))
+    #train_dataset = tf.data.Dataset.from_tensor_slices((dataset['x_train'], dataset['y_train']))
+    #val_dataset = tf.data.Dataset.from_tensor_slices((dataset['x_val'], dataset['y_val']))
+    #test_dataset = tf.data.Dataset.from_tensor_slices((dataset['x_test'], dataset['y_test']))
+    ins_train, outs_train = dataset['x_train'], dataset['y_train']
+    ins_val, outs_val = dataset['x_val'], dataset['y_val']
+    ins_test, outs_test = dataset['x_test'], dataset['y_test']
 
-#########################################
-# set args and train
-parser = create_parser()
-args = parser.parse_args()
+    # scaling
+    ins_train, scalers = transform(ins_train)
+    ins_val, scalers = transform(ins_val)
+    #pickle.dump(scalers, open('scalers/scaler_{}.pkl'.format(args.ID), 'wb'))
+    ins_test, scalers = transform(ins_test)
 
-ins = np.load('datasets/ins_{}.npy'.format(args.ID))
-outs = np.load('datasets/outs_{}.npy'.format(args.ID))
-indices = np.asarray(range(ins.shape[0]))
+    start = time.time()
 
-ins_train, ins_val, outs_train, outs_val = train_test_split(
-    ins, outs, test_size=0.16, random_state=3)
-ins_train, ins_test, outs_train, outs_test = train_test_split(
-    ins_train, outs_train, test_size=0.16, random_state=3)
-#ins_train_indices, ins_test_indices, outs_train_indices, outs_test_indices = train_test_split(
-#    indices, indices, test_size=0.25, random_state=3)
-# scaling
-ins_train, scalers = transform(ins_train)
-ins_val, scalers = transform(ins_val)
-#pickle.dump(scalers, open('scalers/scaler_{}.pkl'.format(args.ID), 'wb'))
-ins_test, scalers = transform(ins_test)
+    # rewrite model call in shortest form on multiple lines
+    model = UNet(ins_train.shape[1:], args.loss, args.batch_size, args.lrate, args.dropout, args.L2, args.filters, 
+                args.junction, args.factor, args.preprocess)  # create model
 
+    model_prefix = f'loss-{args.loss}_dataset-{args.ID}_l2-{args.L2}_dropout-{args.dropout}_factor-{args.factor}_prefix-{args.preprocess}_junction-{args.junction}'
 
-start = time.time()
-if swatml:
-    with strategy.scope():
-        model = UNet(ins_train.shape[1:], nclasses=1)
-elif supercomputer:
-    model = UNet(ins_train.shape[1:], args.junction, args.loss, nclasses=1,filters=args.filters, lambda_regularization=args.lambda_regularization, dropout=args.dropout)  # create model
-    '''
-    model = create_uNet(ins_train.shape[1:], nclasses=5,lambda_regularization=args.lambda_regularization,
-                        activation=args.activation, dropout=args.dropout,
-                        type=args.type, optimizer=args.optimizer,threshold=args.thres)
-    '''
-with open('model_files/model_{}.txt'.format(args.ID), 'w') as f:  # save model architecture
-    model.summary(print_fn=lambda x: f.write(x + '\n'))
-model.summary()  # print model architecture
+    with open(f'model_files/{model_prefix}.txt'.format(args.ID), 'w') as f:  # save model architecture
+        model.summary(print_fn=lambda x: f.write(x + '\n'))
+    model.summary()  # print model architecture
 
-# experiment with smaller batch sizes, as large batches have smaller variance
-generator = training_set_generator_images(
-    ins_train,
-    outs_train,
-    batch_size=args.batch_size,
-    input_name='input',
-    output_name='output')
-early_stopping_cb = keras.callbacks.EarlyStopping(patience=args.patience,
-                                                  monitor='val_loss',
-                                                  restore_best_weights=True,
-                                                  min_delta=0.0)
+    # experiment with smaller batch sizes, as large batches have smaller variance
+    generator = training_set_generator_images(
+        ins_train,
+        outs_train,
+        batch_size=args.batch_size,
+        input_name='input_1',
+        output_name='output')
 
-#checkpoint_cb = keras.callbacks.ModelCheckpoint("results/.h5")
-# Fit the model
-history = model.fit(x=generator,
-                    epochs=args.epochs,
-                    steps_per_epoch=args.steps,
-                    use_multiprocessing=False,
-                    validation_data=(ins_val, outs_val),
-                    verbose=True,
-                    callbacks=[early_stopping_cb])
+    callbacks_list = [keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                min_delta=0,
+                patience=20,
+                verbose=1),
+            keras.callbacks.TerminateOnNaN(),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=0.3,
+                patience=10,
+                min_delta=0,
+                min_lr=0.0001),
+            keras.callbacks.BackupAndRestore(
+                backup_dir='tmp/backup'), # saves weights to retrain model if interrupted
+            keras.callbacks.CSVLogger(
+                filename=f'csv/{model_prefix}.csv'),
+            keras.callbacks.ModelCheckpoint(
+                filepath=f"ckpt/{model_prefix}.h5",
+                save_best_only=True,  # Only save a model if `val_loss` has improved.
+                monitor="val_loss",
+                save_freq=25,),
+            keras.callbacks.TensorBoard(
+                log_dir='log',
+                histogram_freq=10,
+                update_freq='epoch')]
 
-results = {}
-results['true_outs'] = outs
-results['predict_training'] = model.predict(ins_train)
-results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
-results['true_training'] = outs_train
-#results['predict_validation'] = model.predict(ins_val)
-#results['predict_validation_eval'] = model.evaluate(ins_val, outs_val)
-#results['true_validation'] = outs_val
-results['true_testing'] = outs_test
-results['predict_testing'] = model.predict(ins_test)
-results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
-#results['outs_test_indices'] = outs_test_indices
-#results['folds'] = folds
-results['history'] = history.history
+    #checkpoint_cb = keras.callbacks.ModelCheckpoint("results/.h5")
+    # Fit the model
+    history = model.fit(x=generator,
+                        epochs=args.epochs,
+                        steps_per_epoch=args.steps,
+                        use_multiprocessing=False,
+                        validation_data=(ins_val, outs_val),
+                        verbose=True,
+                        callbacks=callbacks_list)
 
-# Save results
-fbase = r"results/{}_{}_{}_{}e_{}b_{}l2_{}s".format(args.loss, args.ID, args.exp_type, args.epochs, args.batch_size, args.lambda_regularization, args.steps)
-results['fname_base'] = fbase
-fp = open("{}_results.pkl".format(fbase), "wb")
-pickle.dump(results, fp)
-fp.close()
+    np.savez(f'results/predictions/{model_prefix}.npz', targets = outs_test, predictions = model.predict(ins_test))
 
-# Model
-model.save("{}_model.h5".format(fbase)) # necessary if using custom metrics
-end = time.time()
-print(fbase)
-print('time:',end-start)
+    results = {}
+    #results['true_outs'] = outs
+    results['predict_training_eval'] = model.evaluate(ins_train, outs_train)
+    results['predict_testing_eval'] = model.evaluate(ins_test, outs_test)
+    #results['outs_test_indices'] = outs_test_indices
+    results['history'] = history.history
 
-#ins = np.load('datasets/ins_shavelike.npy')
-#outs = np.load('datasets/outs_raw.npy')
+    # Save results
 
-#print(model.evaluate(ins,outs))
+    results['fname_base'] = model_prefix
+    fp = open(f"results/{model_prefix}_results.pkl", "wb")
+    pickle.dump(results, fp)
+
+if __name__ == '__main__':
+    main()

@@ -2,7 +2,7 @@
 # Author: Michael Montalbano
 # Purpose: Alter datasets to form 'new' datasets (subsets with different statistics)
 # title: alter.py
-
+import settings as s
 import numpy as np
 import pandas as pd
 import util, random
@@ -16,7 +16,7 @@ Sample method for deleting elements of a dataset:
 bin_indices, ratios, shave_ratios = my_hist(outs_shave, outs_2008)
 print(ratios,shave_ratios) # pick group with very different proportion
 
-w
+
 outs = delete_some(outs_2008,bindices, index=1,percent=10)
 # Repeat until satisfactory 
 '''
@@ -233,25 +233,29 @@ def cluster_2(df_day,day='20110409'):
 
  
 def main():
-    year = sys.argv[1] 
-    creating = True 
-    if creating==True:
-        df_year_events = merge_df(year)
-        df_year_events.reset_index().to_feather(f'csv/events_{year}.feather')
-        df_year_events = pd.read_feather(f'csv/events_{year}.feather')
-        df_year_top_events = keep_top(df_year_events)
-        df_year_top_events.to_feather(f'csv/top_events_{year}.feather')
-    storms = glob.glob(f'/condo/swatwork/mcmontalbano/MYRORSS/data/{year}/**/csv/storms.csv')
-    exit()
-    for storm in storms:
-        date = storm.split('/')[-3]
-        df_year_top_events = pd.read_feather(f'csv/top_events_{year}.feather')
+    for year in np.arange(1999,2011,1): 
+        creating = True 
         try:
-            storms_df = pd.read_csv(storm)
+            if creating==True:
+                df_year_events = merge_df(year)
+                df_year_events.reset_index().to_feather(f'csv/events_{year}.feather')
+                df_year_events = pd.read_feather(f'csv/events_{year}.feather')
+                df_year_top_events = keep_top(df_year_events)
+                df_year_top_events.to_feather(f'csv/top_events_{year}.feather')
+            storms = glob.glob(f'/condo/swatwork/mcmontalbano/MYRORSS/data/{year}/**/csv/storms.csv')
+            for storm in storms:
+                date = storm.split('/')[-3]
+                df_year_top_events = pd.read_feather(f'csv/top_events_{year}.feather')
+                try:
+                    storms_df = pd.read_csv(storm)
+                except:
+                    print(storm)
+                    continue
+                storms_after = switch_off_storms(storms_df, df_year_top_events, date)
+                storms_after.reset_index().to_feather(f'/condo/swatwork/mcmontalbano/MYRORSS/data/{date[:4]}/{date}/csv/storms.feather')
         except:
-            print(storm)
-            continue
-        storms_after = switch_off_storms(storms_df, df_year_top_events, date)
-        storms_after.reset_index().to_feather(f'/condo/swatwork/mcmontalbano/MYRORSS/data/{date[:4]}/{date}/csv/storms.feather')           
+            continue       
+                  
+
 if __name__ == "__main__":
     main()

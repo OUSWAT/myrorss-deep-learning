@@ -1,5 +1,5 @@
 
-home = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
+home = '/condo/swatwork/mcmontalbano/MYRORSS/scripts'
 DATA_HOME = '/condo/swatcommon/common/myrorss'
 TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 multi_fields = ['MergedReflectivityQCComposite_Max_30min','MergedLLShear_Max_30min','MergedMLShear_Max_30min','Reflectivity_0C_Max_30min','MESH_Max_30min']
@@ -30,6 +30,13 @@ data_path = '/condo/swatwork/mcmontalbano/MYRORSS/data'
 nse_path = '/condo/swatcommon/NSE'
 scripts = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
 mht_path = f'{data_path}/2011/20110409'
+
+# Hyperparameters
+index = ['index', 'dataset_ID', 'loss', 'Add', 'Concat', 'dropout', 'L2', 'factor']
+metrics = ['MSE','G_beta_RMSE','G_beta','POD','FAR','Delta','Hausdorff','PHD_k']
+one_hot_preprocessing = ['Translation', 'Contrast', 'Rotation','Zoom','Crop','Flip','Noise']
+one_hot_loss = ['MSE']
+
 
 def path(date):
     return f'{data_path}/{date[:4]}/{date}'
