@@ -1,5 +1,4 @@
 ############################################
-
 # Author: Michael Montalbano
 #
 # Purpose: Load data from the MYRORSS directories on OSCER
@@ -18,205 +17,233 @@ import pandas as pd
 from ast import literal_eval
 from netCDF4 import Dataset
 import glob, util
-import util
+import util, pyarrow
+from ast import literal_eval
+import settings as s
+import shutil
+from sklearn.model_selection import train_test_split
+# load new datasets
 
-home = '/condo/swatwork/mcmontalbano/MYRORSS/myrorss-deep-learning'
-DATA_HOME = '/condo/swatcommon/common/myrorss'
-TRAINING_HOME = '/condo/swatwork/mcmontalbano/MYRORSS/data'
-multi_fields = ['MergedLLShear_Max_30min','MergedLLShear_Min_30min','MergedMLShear_Max_30min','MergedMLShear_Min_30min','MergedReflectivityQC','MergedReflectivityQCComposite_Max_30min','Reflectivity_0C_Max_30min','Reflectivity_-10C_Max_30min','Reflectivity_-20C_Max_30min']
-swath_fields = ['MergedLLShear_Max_30min','MergedMLShear_Max_30min','MergedReflectivityQCComposite_Max_30min','MESH_Max_30min']
-NSE_fields = ['MeanShear_0-6km', 'MUCAPE', 'ShearVectorMag_0-1km', 'ShearVectorMag_0-3km', 'ShearVectorMag_0-6km', 'SRFlow_0-2kmAGL', 'SRFlow_4-6kmAGL', 'SRHelicity0-1km', 'SRHelicity0-2km', 'SRHelicity0-3km', 'UWindMean0-6km', 'VWindMean0-6km', 'Heightof0C','Heightof-20C','Heightof-40C']
-degrees = ['06.50', '02.50', '05.50', '01.50', '08.00', '19.00', '00.25', '00.50', '09.00', '18.00', '01.25', '20.00', '04.50', '03.50', '02.25', '07.50', '07.00', '16.00', '02.75', '12.00', '03.00', '04.00', '15.00', '11.00', '01.75', '10.00', '00.75', '08.50', '01.00', '05.00', '14.00', '13.00', '02.00', '06.00', '17.00']
+def make_dict(keys):
+    valid_fields = {}
+    for key in keys:
+        valid_fields[key] = True
+    return valid_fields
 
-targets = ['target_MESH_Max_30min']
-products = multi_fields  + targets
-field_list =  swath_fields
-# INPUT VARIABLES HERE
-# make this more elegant, to input from the shell. check e0xtract.py
-#year=str(sys.argv[1])
-#b0=int(sys.argv[2])
-#b1=int(sys.argv[3])
-year='2011'
-
-# Get the cases in year
-def get_cases(year):
-    cases = []
-    path = '{}/{}'.format(TRAINING_HOME,year)
-    possible_storms = os.listdir(path)
-    for storm in possible_storms:
-        if storm[:4] == year:
-            cases.append(storm[:8])
-    return cases
-
-def info(df,i):
-    # returns storm path for an index i in dataframe df
-    for idx, row in df.iterrows():
-        if idx == i:
-            return row['storm_path'], row['features']
-       
-def load_data_from_df(df):
-    df_qc = df[df['features']>37]
-    df_qc = df_qc[df_qc['features']<50]
-    ins_full = np.asarray([])
-    outs_full = np.asarray([])
-    
-    for idx, row in df_qc.iterrows():
-        n = int(row['features'])
-        storm = row['storm_path']
-        if n < 36:
-            continue # skip
-        ins = np.asarray([]) 
-    #    outs_full = np.asarray([])        
-        nc_files = []
-        missing_fields = []
-        #outs = []
-        # grab reflcectivity first        
-        field = 'MergedReflectivityQC'
-        for deg in degrees:
-            nc_file = glob.glob('{}/{}/{}/*netcdf'.format(storm,field,deg))
-            if nc_file == []:
-                missing_fields.append(deg)
-            else:
-                nc_files.append(nc_file[0])
-            # check for multiple files or 
-        for field in field_list:
-            missing_fields = []
-            nc_file = glob.glob('{}/{}/**/*netcdf'.format(storm,field))
-            if nc_file == []:
-                nc_file = glob.glob('{}/NSE/{}/**/*netcdf'.format(storm,field))
-                if nc_file == []: 
-                    missing_fields.append(field)
+def load_data_in_year(year='2011',month=None):
+    ins_full = [] # instantiate
+    outs_full = []
+    df_hail = pd.read_csv(f'csv/{year}_hail_events.csv')
+    # get list of storm_dfs
+    if month:
+        list_of_paths_to_storm_dfs_in_year = glob.glob(f'{s.data_path}/{year}/{year}{month}*/csv/storms.feather')
+    else:
+        list_of_paths_to_storm_dfs_in_year = glob.glob(f'{s.data_path}/{year}/20*/csv/storms.feather')
+    # get list of days in year with more than 10 hail events
+    df_hail = df_hail[df_hail['hail_events'] >= 10]
+    # get list of days with more than 10 hail events
+    dates_with_sig_hail = [str(date) for date in df_hail['day'].tolist()]
+    #print(type(dates_with_sig_hail[0]))
+    # get list of paths to storm_dfs with more than 10 hail events
+    list_of_paths_to_storm_dfs_with_sig_hail = [f for f in list_of_paths_to_storm_dfs_in_year if f.split('/')[7] in dates_with_sig_hail]
+    print(list_of_paths_to_storm_dfs_with_sig_hail)
+    if list_of_paths_to_storm_dfs_with_sig_hail == []:
+        print(dates_with_sig_hail)
+        print(list_of_paths_to_storm_dfs_in_year)
+    for path_to_storm_df in list_of_paths_to_storm_dfs_with_sig_hail:
+        try:
+            df = pd.read_feather(path_to_storm_df)
+        except Exception as e:
+            print(f'0 {e}')
+            continue
+        pieces = path_to_storm_df.split('/')
+        print(pieces)
+        date_path = '/'.join(pieces[:-3])
+        date = int(pieces[-3])
+        print(f'this is the {date_path}')
+        print(f'the date is {date}')
+        df_True = df[df['is_Storm']==True]
+        indices = [x for x in df_True['index'].tolist()]
+        print(f'indices: ',indices)
+        for idx in indices:
+            # get all netcdf files in storm directory
+            path_to_storm = f'{date_path}/{date}/storm{str(idx).zfill(4)}'
+            pattern_to_inputs = f'{path_to_storm}/**/**/*.netcdf'
+            pattern_to_target = f'{path_to_storm}/target*/**/**/*.netcdf'
+            patterns = (pattern_to_inputs, pattern_to_target)
+            files_to_netcdfs = []
+            for pattern in patterns:
+                files_to_netcdfs.extend(glob.glob(pattern))
+            if not files_to_netcdfs:
+                continue
+            try:
+                ins, outs = load_data_with_netcdf_list(files_to_netcdfs)
+                if not ins or not outs:
                     continue
-                else:
-                    nc_files.append(nc_file[0])
-            nc_files.append(nc_file[0])
-        if missing_fields != []:
-            break
-        for f in nc_files:
-            nc = Dataset(f)
-            var = nc.variables[f.split('/')[-3]][:,:]
-            var = np.where(var<-20,0,var)
-            np.copyto(ins,var)
-        np.copyto(ins_full,ins,cast='same_kind')
-       # ins_full.append(np.asarray(ins))
-        # Append out to outs
-        target_file = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/**/*.netcdf'.format(storm))
-        f = target_file[0]        
-        if f == []:
-            ins_full.pop()
-            break
-        nc = Dataset(f)
-        var = nc.variables['MESH_Max_30min'][:,:]
-        var = np.where(var<0,0,var)
-        np.copyto(outs_full, var,cast='same_kind')
-       # outs_full.append(var)
+                ins_full.append(ins)
+                outs_full.append(outs)
+            except Exception as e:
+                print(e)
+                print(f'Error loading {path_to_storm}')
+                continue
     return ins_full, outs_full
 
-def get_df_shapes(year='2011'):
-    # check shape of ins for each storm_path
-    # return df of shape and path
-    shape_list = []
-    i=0
-    days = get_cases(year)
-    df = pd.DataFrame(columns={'storm_path','features','feature_list'})
-    for idx, day in enumerate(days):
-        year = day[:4]
-        fields = []
-        storms = glob.glob('{}/{}/{}/storm*'.format(TRAINING_HOME,year,day))
-        for storm in storms:
-            ins = []
-            files = get_storm_files(storm)
-            if files == []:
-                row = {'storm_path':storm, 'features':0, 'feature_list':[]}
-                df.loc[i] = row
-                i+=1
-                continue
-            for f_name in files:
-                fields.append(f_name.split('/')[3])
-            row = {'storm_path':storm,'features':len(files),'feature_list':files,'fields':fields}
-            df.loc[i] = row
-            i+=1
-    df.to_csv('{}/csv/{}_missing_fields.csv'.format(home,year))
-    return df
-
-def get_storm_files(storm):
-    # given a storm path, return the files as a list of strings
-    f_times = [] 
-    files = []
-    fields = []
-    target = glob.glob('{}/target_MESH_Max_30min/MESH_Max_30min/00.25/*netcdf'.format(storm))
-    if target == []:
-        return [] # return empty if no target
-    target = target[0]
-    target_time = str(target.split('/')[-1]).split('.')[0] # grab the timestamp from the file name
-    target_time = datetime.datetime.strptime(target_time,"%Y%m%d-%H%M%S")
-    f_times.append(target_time)
-    files.append(target) # append the target as the first file
-    swath_files = glob.glob('{}/**/**/*.netcdf'.format(storm))
-    for fname in swath_files:
-        files.append(fname)
-        field = fname.split('/')[-3] # grab field
-        if field not in fields and field in multi_fields: # collect each field once and treat multi_fields different by:
-            # Check that the time is different from the target (i.e. 30 min early)
-            ftime = util.get_time_from_fname(fname)
-            f_times.append(ftime)
-            if ftime != target_time and fname not in files: # target time is different, and the file is new
-                fields.append(field) # add to fields
-                files.append(fname)  # add to files     
-    # NSE data
-    NSE_files = sorted(glob.glob('{}/NSE/**/**/*.netcdf'.format(storm), recursive=True))
-    for fname in NSE_files:
-        field = fname.split('/')[-3] # grab field
-        if field not in fields:
-            fields.append(field)
-            files.append(fname)    
-    return files
-
-# Build pandas dataframe of days and the number of storms in each day
-def build_df(cases):
-    days = cases
-    storm_count = []
-    for day in days: 
-        storm_count = 0
-        year = day[:4]
-        storm_path = '{}/{}/{}'.format(TRAINING_HOME,year,day)
-        subdirs = sorted(os.listdir(storm_path))
-        for subdir in subdirs: # for storm in storms
-            if subdir[:5] == 'storm' and subdir[:6] != 'storms':
-                storm_count+=1
-    df = pd.DataFrame(data={'days':days,'storms':storm_count})
-    return df
-
-def modify_ins(ins,indices):
-    """
-    Purpose: deletes rows of ins to make new datasets
-     @param - ins : 4D myrorss ndarray
-     @param - indices: list of integers, the indices to delete (0->N-1)
-    """
+def load_data_with_netcdf_list(list_of_netcdf_files,fields=s.multi_fields+s.targets+s.degrees):
+    ins = []
+    outs = []
+    if not list_of_netcdf_files:
+        print(f'No files')
+        return False   
+    valid_fields = make_dict(fields) # valid fields is True if the field has not been added to inputs or outputs
+    # step through valid_fields, then find the netcdfs that have the field, then add to inputs or outputs
+    for field in valid_fields:
+        # get all files with field in name
+        list_of_netcdf_files_with_field = [f for f in list_of_netcdf_files if field in f]
+        # if empty, continue
+        if len(list_of_netcdf_files_with_field) == 0:
+            return [], [] 
+        # if more than 1 file, check if field is NSE_field
+        if len(list_of_netcdf_files_with_field) > 1:
+            if field in s.NSE_fields:
+                    # if so, add the file with the earliest timedate
+                list_of_netcdf_files_with_field.sort(key=lambda x: x.split('/')[-1].split('.')[-2])
+                list_of_netcdf_files_with_field = list_of_netcdf_files_with_field[:1]
+        # get filename from list_of_netcdf_files_with_field
+        file_path = list_of_netcdf_files_with_field[0]
+        if valid_fields[field] and field == 'MESH_Max_30min': # check if field has been loaded and that product is MESH (i.e. not the target)
+            nc = Dataset(file_path)
+            var = nc.variables[field][:,:]
+            ins.append(var)
+            valid_fields[field] = False
+        elif valid_fields[field] and field == 'target_MESH_Max_30min':
+            nc = Dataset(file_path)
+            var = nc.variables['MESH_Max_30min'][:,:]
+            outs.append(var)
+            valid_fields[field] = False
+        elif valid_fields[field] and file_path.split('/')[-3] == 'MergedReflectivityQC': #  check for valid_fields[degree], and if so, check that
+            # Improve: make dict linking valid_fields keys to variable of key,
+            # i.e. 01:00 : MergedRefQC, MESH_Max_30min : MESH_Max_30min
+            nc = Dataset(file_path)
+            var = nc.variables["MergedReflectivityQC"][:,:]
+            ins.append(var)
+            valid_fields[field] = False
+        else:
+            nc = Dataset(file_path)
+            var = nc.variables[field][:,:]
+            ins.append(var)
+            valid_fields[field] = False
+    if all(value == False for value in valid_fields.values()):
+        print(f'returned True for') 
+        return ins, outs
+    else:
+        true_keys = [x for x in valid_fields.keys() if valid_fields[x] == True]
+        print(f'Missing the following keys: {true_keys}')
+        return [], []
+   
+def load_field_on_day(field='target_MESH_Max_30min',date='20110409'):
+    # Given a field and day, load into an npy 
+    var_list = []
+    storm_df = pandas.read_feather(f'{s.data_path}/{date[:4]}/{date}/csv/storms.feather') 
+    df_True = df[df['is_Storm']==True]
+    indices = [x for x in df_True['index'].tolist()]
     for idx in indices:
-        ins = ins[:,:,:,idx]*0
-    return ins
+        path_to_storm = f'{date_path}/{date}/storm{str(idx).zfill(4)}'
+        pattern_to_var = f'{path_to_storm}/{field}/**/*.netcdf'
+        patterns = (pattern_to_var)
+        files_to_netcdfs = []
+        for pattern in patterns:
+            files_to_netcdfs.extend(glob.glob(pattern))
+        if not files_to_netcdfs:
+            continue
+        try:
+            ins, outs = load_data_with_netcdf_list(files_to_netcdfs)
+            if not ins or not outs:
+                continue
+            ins_full.append(ins)
+            outs_full.append(outs)
+        except Exception as e:
+            print(e)
+            print(f'Error loading {path_to_storm}')
+            continue
+    return ins_full, outs_full
+
+
+def check_files_for_missing_fields(files, fields):
+    valid_fields = make_dict(fields) # valid fields is True if the field has not been added to inputs or outputs
+    if not files:
+        print('F:0')
+        return False
+    storm_path = files[0]
+    for field in valid_fields:
+        # get all files with field in name
+        list_of_netcdf_files_with_field = [f for f in files if field in f]
+        # if empty, continue
+        if len(list_of_netcdf_files_with_field) == 0:
+            continue
+        # if more than 1 file, check if field is NSE_field
+        if len(list_of_netcdf_files_with_field) > 1:
+            if field in s.NSE_fields:
+                # if so, add the file with the earliest timedate 
+                list_of_netcdf_files_with_field.sort(key=lambda x: x.split('/')[-1].split('.')[-2])
+                list_of_netcdf_files_with_field = list_of_netcdf_files_with_field[:1]
+                # delete the other files from the directory
+                for f in list_of_netcdf_files_with_field[1:]:
+                    os.remove(f)
+        # get filename from list_of_netcdf_files_with_field
+        file_path = list_of_netcdf_files_with_field[0]
+        if valid_fields[field] and field == 'MESH_Max_30min': # check if field has been loaded and that product is MESH (i.e. not the target)
+            valid_fields[field] = False  
+        elif valid_fields[field] and field == 'target_MESH_Max_30min':
+            valid_fields[field] = False
+        elif valid_fields[field] and file_path.split('/')[-3] == 'MergedReflectivityQC': #  check for valid_fields[degree], and if so, check that
+            valid_fields[field] = False   # note that MergedRefQC is not a valid field, as the degrees stand in as fields of MRQC
+        else:
+            valid_fields[field] = False # otherwise, handle in the basic way for most common file pattern (i.e. NSE fields and most swaths)
+    if all(value == False for value in valid_fields.values()):
+        print('T0')
+        return True
+    else:
+        # print the storm path and the dict of valid_fields
+        print('F1')
+        return False
+
+def dirty_load(date='20110409',file_pattern='storm*/target*/MESH_Max_30min',field='MESH_Max_30min'):
+    var_list = []
+    netcdfs = glob.glob(f'{s.data_path}/{date[:4]}/{date}/{file_pattern}/**/*.netcdf')
+    for netcdf in netcdfs:
+        nc = Dataset(netcdf)
+        var = nc.variables[field][:,:]
+        var = np.where(var<0,0,var)
+        var_list.append(var)
+    return np.asarray(var_list)
 
 def main():
-   # year = '2011'
-   # df = get_df_shapes(year='2011')
-   # print(df)
-   # df.to_csv('csv/{}_missing_fields.csv'.format(year))
-    df = pd.read_csv('csv/2011_missing_fields.csv')
-    ins, outs = load_data_from_df(df)
-    ins = np.asarray(ins)
-    outs = np.asarray(outs)
-  #  ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-  #  outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-
-    np.save('datasets/ins_2011_fixed.npy',ins)
-    np.save('datasets/outs_2011.npy',outs)
+    var = dirty_load('20070813')
+    np.save('var/20070813.npy',var)
+    #var = dirty_load(file_pattern='MESH/storm*/target*/MESH_Max_30min')
+    exit()
+    year = sys.argv[1]
+    month = sys.argv[2]
+    if month == 'None':
+        month=None
+    choice = sys.argv[3]
+    print(f'year {year} with type {type(year)} and choice {choice} with {type(choice)}')
+    if choice == 'load':
+        ins, outs = load_data_in_year(year,month=month)
+        ins = np.moveaxis(ins, 1, 3)
+        outs = np.moveaxis(outs, 1, 3)
+        ins_train, ins_test, outs_train, outs_test = train_test_split(
+                                        ins, outs, test_size=0.16, random_state=3)
+        ins_val, ins_test, outs_val, outs_test = train_test_split(
+                                        ins_train, outs_train,size=0.2, random_state=3)
         
-    ins = np.reshape(ins, (ins.shape[0],60,60,ins.shape[1]))
-    outs = np.reshape(outs, (outs.shape[0],60,60,outs.shape[1]))
-    np.save('datasets/reshaped_ins_2011.npy',ins)
-    np.save('datasets/reshaped_outs_2011.npy',outs)
+        if month is not None:
+            filename = f'dataset_{year}{month}.npz'
+        else: filename = f'datasets/dataset_{year}.npz'
+ 
+        np.savez(f'{filename}', x_train = ins_train, x_test = ins_test,
+                                x_val = ins_val, y_val = outs_val,
+                                y_train = outs_train, y_test = outs_test)
     
 if __name__ == '__main__':
     main()
-
