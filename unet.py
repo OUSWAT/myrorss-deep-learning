@@ -1,713 +1,231 @@
 # Author: Michael Montalbano
 # Create U-Network or Autoencoder
 
+from turtle import xcor
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, Dropout, BatchNormalization, Convolution2D, Dense, MaxPooling2D, Flatten, BatchNormalization, Dropout, Concatenate, Input, UpSampling2D, Add
+from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, SpatialDropout2D, BatchNormalization, Convolution2D, Dense, MaxPooling2D, Flatten, BatchNormalization, Dropout, Concatenate, Input, UpSampling2D, Add
+from tensorflow.keras.layers import Conv2DTranspose, RandomTranslation
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
 from sklearn.metrics import mean_squared_error
-from metrics_binarized import *
 import sys
 import numpy as np
-import tensorflow_addons as tfa
-
-# channels should increase as you step down the U-Net
-# ratio of rows*columns/channels should go down
-l=[]
-for i in np.arange(1,41,1):
-    l.append(i)
-
-def create_uNet(input_shape, nclasses=2, filters=[64,128,256], 
-                   lambda_regularization=None, activation='relu',dropout=None,
-                   type='binary', optimizer='adam',threshold=0.1):
-                
-    global thres 
-    thres = threshold
-
-    if lambda_regularization is not None:
-        lambda_regularization = keras.regularizers.l2(lambda_regularization)
-    
-    lrelu = lambda x: tf.keras.activations.relu(x, alpha=0.1)
-    activation = lrelu
-    
-    tensor_list = []
-    input_tensor = Input(shape=input_shape, name="input")
-
-    # First Layer is Batch Normalization
-    tensor = BatchNormalization()(input_tensor) # batch1
-    tensor = GaussianNoise(0.1)(tensor)
-
-    # conv2d
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = BatchNormalization()(tensor) # batch2
-
-    # conv2d_1
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    #tensor = BatchNormalization()(tensor) # batch2
-
-    tensor_list.append(tensor)
-
-    if dropout is not None:
-        tensor = Dropout(dropout)(tensor)
-    
-    #############################
-    
-    # batch3
-    tensor = AveragePooling2D(pool_size=(2,2),
-                          strides=(2,2),
-                          padding='same')(tensor)
-    
-    # batch4
-    # 30x30
-    tensor = BatchNormalization()(tensor)
-    # First step - first conv conv2d_2
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    # batch5
-    tensor = BatchNormalization()(tensor)
-
-    # 2nd conv conv2d_3
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    # SKIP CONNECTION 1
-    tensor_list.append(tensor)
-
-    tensor = BatchNormalization()(tensor)
-
-    tensor = AveragePooling2D(pool_size=(2,2),
-                          strides=(2,2),
-                          padding='same')(tensor)
-
-    # 15x15
-    tensor = BatchNormalization(axis=[1,2])(tensor)    
-
-    tensor = Convolution2D(filters[2],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    tensor = BatchNormalization(axis=[1,2])(tensor) 
-
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)   
-    # /upsample and batchnorm
-    tensor = UpSampling2D(size=2) (tensor) # take 1 pixel and expand it out to 2 x 2
-
-    tensor = BatchNormalization(axis=[1,2])(tensor)
-
-
-    # 3rd conv2d_4
-    tensor = Convolution2D(filters[1],               
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = BatchNormalization()(tensor)
-
-    # 3rd conv2d_5
-    tensor = Convolution2D(filters[1],               
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-
-    # SKIP CONNECTION 1
-    tensor = Add()([tensor, tensor_list.pop()])
-   
-    # 60x60
-    tensor = UpSampling2D(size=2) (tensor) # take 1 pixel and expand it out to 2 x 2
-
-    tensor = BatchNormalization()(tensor)
-
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = BatchNormalization()(tensor)
-
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = Add()([tensor, tensor_list.pop()])
-
-    tensor = BatchNormalization(axis=[1,2])(tensor)
-
-    #############################   
-    if type == 'binary':
-        output_tensor = Convolution2D(1,
-                          kernel_size=(1,1),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation='sigmoid',name='output')(tensor)
-    if type == 'regression' or type == 'custom':
-        output_tensor = Convolution2D(1,
-                          kernel_size=(1,1),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation,name='output')(tensor)
-
-    if type == 'categorical':
-        output_tensor = Convolution2D(nclasses,
-                          kernel_size=(1,1),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation='softmax',name='output')(tensor)
-
-    if optimizer == 'adam':
-        opt = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999,
-                                 epsilon=None, decay=0.0, amsgrad=False)
-    if optimizer == 'SGD':
-        opt = keras.optimizers.SGD(lr = 1e-4, momentum=0.1, 
-                                nesterov=False, name='SGD')
-    if optimizer == 'RMSprop':
-        opt = keras.optimizers.RMSprop(lr=0.00001)
-
-    model = Model(inputs=input_tensor, outputs=output_tensor)
-
-    if type == 'custom':
-        model.compile(loss=customMSE,optimizer=opt,
-                  metrics=['mse'])   
-
-    if type == 'regression':
-        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                      metrics=[tf.keras.metrics.MeanSquaredError()])
-    if type == 'binary':
-        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                      metrics=[tf.keras.metrics.MeanSquaredError()])
-    if type == 'categorical':
-        model.compile(loss='categorical_crossentropy',optimizer=opt,
-                        metrics='accuracy')
-    
-    #model.compile(loss='mse',optimizer="adam",
-    #             metrics=[MyBinaryAccuracy(),
-    #                       MyAUC()])
-    
-    return model
-
-def create_uNetPlus(input_shape, nclasses=2, filters=[64,128,256], 
-                   lambda_regularization=None, activation='relu',dropout=None,
-                   type='binary', optimizer='adam',threshold=0.1):
-                
-    global thres 
-    thres = threshold
-
-    if lambda_regularization is not None:
-        lambda_regularization = keras.regularizers.l2(lambda_regularization)
-    
-    lrelu = lambda x: tf.keras.activations.relu(x, alpha=0.1)
-    activation = lrelu
-    
-    tensor_list = []
-    input_tensor = Input(shape=input_shape, name="input")
-
-    # First Layer is Batch Normalization
-    tensor = BatchNormalization(axis=[1,2])(input_tensor)
-    tensor = GaussianNoise(0.1)(tensor)
-
-    # conv2d
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = BatchNormalization()(tensor)
-
-    # conv2d_1
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    tensor_list.append(tensor)
-
-    if dropout is not None:
-        tensor = Dropout(dropout)(tensor)
-    
-    #############################
-    
-
-    #tensor = BatchNormalization(axis=[1,2])(tensor)
-
-    tensor = AveragePooling2D(pool_size=(2,2),
-                          strides=(2,2),
-                          padding='same')(tensor)
-    
-    #tensor = BatchNormalization()(tensor)
-    # 30x30
-
-    # First step - first conv conv2d_2
-    # tensor = Convolution2D(filters[1],
-    #                       kernel_size=(3,3),
-    #                       padding='same', 
-    #                       use_bias=True,
-    #                       kernel_initializer='random_uniform',
-    #                       bias_initializer='zeros',
-    #                       kernel_regularizer=lambda_regularization,
-    #                       activation=activation)(tensor)
-    
-    # tensor = BatchNormalization()(tensor)
-
-    # 2nd conv conv2d_3
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    # tensor_list.append(tensor)
-
-    #tensor = BatchNormalization()(tensor)
-
-    # 3rd conv2d_4
-    # tensor = Convolution2D(filters[1],               
-    #                       kernel_size=(3,3),
-    #                       padding='same', 
-    #                       use_bias=True,
-    #                       kernel_initializer='random_uniform',
-    #                       bias_initializer='zeros',
-    #                       kernel_regularizer=lambda_regularization,
-    #                       activation=activation)(tensor)
-
-    tensor = BatchNormalization()(tensor)
-
-    # 3rd conv2d_5
-    tensor = Convolution2D(filters[1],               
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-
-#     tensor = Add()([tensor, tensor_list.pop()])
-   
-    # 60x60
-    tensor = UpSampling2D(size=2) (tensor) # take 1 pixel and expand it out to 2 x 2
-
-    #tensor = BatchNormalization(axis=[1,2])(tensor)
-
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    #tensor = Add()([tensor, tensor_list.pop()])    
-
-    tensor = BatchNormalization(axis=[1,2])(tensor)
-
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-
-    tensor = Add()([tensor, tensor_list.pop()])
-
-    tensor = BatchNormalization(axis=[1,2])(tensor)
-
-    #############################   
-
-    if type == 'regression' or type == 'custom':
-        output_tensor = Convolution2D(1,
-                          kernel_size=(1,1),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation,name='output')(tensor)
-
-    if optimizer == 'adam':
-        opt = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999,
-                                 epsilon=None, decay=0.0, amsgrad=False)
-
-    model = Model(inputs=input_tensor, outputs=output_tensor)
-
-    if type == 'custom':
-        model.compile(loss=customMSE,optimizer=opt,
-                  metrics=['mse'])   
-
-    if type == 'regression':
-        model.compile(loss=tf.keras.losses.MeanSquaredError(), optimizer=opt,
-                      metrics=[tf.keras.metrics.MeanSquaredError()])
-    
-    return model
-
-def loss_MSE(y_true, y_pred):
-    return tf.reduce_mean(tf.square(y_true - y_pred),axis=[1])
-
-def my_MSE_weighted(y_true, y_pred):
-    return K.mean(
-        tf.multiply(
-            tf.exp(tf.multiply(5.0, y_true)),
-            tf.square(tf.subtract(y_pred, y_true))
-
-        )
-    )
-    
-
-
-
-def my_mse_with_sobel(weight=0.0):
-    # combines MSE with Sobel edges, which can help produce model predictions with sharper spatial gradients (Uphoff et. al 2021)
-    def loss(y_true,y_pred):
-        # This function assumes that both y_true and y_pred have no channel dimension.
-        # For example, if the images are 2-D, y_true and y_pred have dimensions of
-        # batch_size x num_rows x num_columns. tf.expand_dims adds the channel
-        # dimensions before applying the Sobel operator.
-        edges = tf.image.sobel_edges(tf.expand_dims(y_pred,-1))
-        dy_pred = edges[...,0,0]
-        dx_pred = edges[...,0,1]
-        edges = tf.image.sobel_edges(tf.expand_dims(y_true,-1))
-        dy_true = edges[...,0,0]
-        dx_true = edges[...,0,1]
-        return K.mean(
-        tf.square(tf.subtract(y_pred,y_true)) +
-        weight*tf.square(tf.subtract(dy_pred,dy_true)) +
-        weight*tf.square(tf.subtract(dx_pred,dx_true))
-        )
-    return loss
-
-# Function to calculate "fractions skill score" (FSS).
-#
-# Function can be used as loss function or metric in neural networks.
-#
-# Implements FSS formula according to original FSS paper:
-# N.M. Roberts and H.W. Lean, "Scale-Selective Verification of
-# Rainfall Accumulation from High-Resolution Forecasts of Convective Events",
-# Monthly Weather Review, 2008.
-# This paper is referred to as [RL08] in the code below.
-25
-def make_FSS_loss(mask_size): # choose any mask size for calculating densities
-    def my_FSS_loss(y_true, y_pred):
-        # First: DISCRETIZE y_true and y_pred to have only binary values 0/1
-        # (or close to those for soft discretization)
-        want_hard_discretization = False
-        # This example assumes that y_true, y_pred have the shape (None, N, N, 1).
-        cutoff = 0.7 # choose the cut off value for discretization
-        if (want_hard_discretization):
-            # Hard discretization:
-            # can use that in metric, but not in loss
-            y_true_binary = tf.where(y_true>cutoff, 1.0, 0.0)
-            y_pred_binary = tf.where(y_pred>cutoff, 1.0, 0.0)
-        else:
-            # Soft discretization
-            c = 10 # make sigmoid function steep
-            y_true_binary = tf.math.sigmoid( c * ( y_true - cutoff ))
-            y_pred_binary = tf.math.sigmoid( c * ( y_pred - cutoff ))
-                # Done with discretization.
-        # To calculate densities: apply average pooling to y_true.
-        # Result is O(mask_size)(i,j) in Eq. (2) of [RL08].
-        # Since we use AveragePooling, this automatically includes the factor 1/n^2 in Eq. (2).
-        pool1 = tf.keras.layers.AveragePooling2D(pool_size=(mask_size, mask_size), strides=(1, 1),
-        padding='valid')
-        y_true_density = pool1(y_true_binary);
-        # Need to know for normalization later how many pixels there are after pooling
-        n_density_pixels = tf.cast( (tf.shape(y_true_density)[1] * tf.shape(y_true_density)[2]) ,
-        tf.float32 )
-        # To calculate densities: apply average pooling to y_pred.
-        # Result is M(mask_size)(i,j) in Eq. (3) of [RL08].
-        # Since we use AveragePooling, this automatically includes the factor 1/n^2 in Eq. (3).
-        pool2 = tf.keras.layers.AveragePooling2D(pool_size=(mask_size, mask_size),
-        strides=(1, 1), padding='valid')
-        y_pred_density = pool2(y_pred_binary);
-        # This calculates MSE(n) in Eq. (5) of [RL08].
-        # Since we use MSE function, this automatically includes the factor 1/(Nx*Ny) in Eq. (5).
-        MSE_n = tf.keras.losses.MeanSquaredError()(y_true_density, y_pred_density)
-        # To calculate MSE_n_ref in Eq. (7) of [RL08] efficiently:
-        # multiply each image with itself to get square terms, then sum up those terms.
-        # Part 1 - calculate sum( O(n)i,j^2
-        # Take y_true_densities as image and multiply image by itself.
-        O_n_squared_image = tf.keras.layers.Multiply()([y_true_density, y_true_density])
-        # Flatten result, to make it easier to sum over it.
-        O_n_squared_vector = tf.keras.layers.Flatten()(O_n_squared_image)
-        # Calculate sum over all terms.
-        O_n_squared_sum = tf.reduce_sum(O_n_squared_vector)
-        # Same for y_pred densitites:
-        # Multiply image by itself
-        M_n_squared_image = tf.keras.layers.Multiply()([y_pred_density, y_pred_density])
-        # Flatten result, to make it easier to sum over it.
-        M_n_squared_vector = tf.keras.layers.Flatten()(M_n_squared_image)
-        # Calculate sum over all terms.
-        
-        M_n_squared_sum = tf.reduce_sum(M_n_squared_vector)
-        MSE_n_ref = (O_n_squared_sum + M_n_squared_sum) / n_density_pixels
-        # FSS score according to Eq. (6) of [RL08].
-        # FSS = 1 - (MSE_n / MSE_n_ref)
-        # FSS is a number between 0 and 1, with maximum of 1 (optimal value).
-        # In loss functions: We want to MAXIMIZE FSS (best value is 1),
-        # so return only the last term to minimize.
-        # Avoid division by zero if MSE_n_ref == 0
-        # MSE_n_ref = 0 only if both input images contain only zeros.
-        # In that case both images match exactly, i.e. we should return 0.
-        my_epsilon = tf.keras.backend.epsilon() # this is 10^(-7)
-
-        if (want_hard_discretization):
-            if MSE_n_ref == 0:
-                return( MSE_n )
+import metrics
+import loss_functions
+import random
+import keras_tuner as kt
+from blocks import resnet_block
+
+class UNet(object):
+    def __init__(self, args, dataset, input_shape=(60,60,41)):
+        self.args = args # pass it around
+        print(self.args) 
+        self.dataset = dataset # 
+        self.input_shape = self.dataset.xtr.shape[1:] 
+        self.dropout = args.dropout 
+        self.depth = args.depth
+        self.l2 = args.L2
+        self.junction = args.junction
+        self.tensor_list = []
+        self.filters = args.filters
+        self.custom_object_names = []
+        self.custom_objects = {}
+        self.metrics_fncts = [] 
+        self.use_pooling = False
+        if self.dropout > 0:
+            self.use_dropout = False
+        else: self.use_dropout = True 
+        self.use_transpose = bool(args.use_transpose)
+        self.transpose_params = dict(kernel_size=(2,2), padding='same', strides=(2,2),use_bias=False)
+        self.paddings = tf.constant([[0,0],[2,2],[2,2],[0,0]])
+        self.model = None
+        self.translation_factor = self.args.t_fac
+        self.gauss_factor = self.args.g_fac
+        self.gain = args.gain
+        self.bias = args.bias 
+        self.std_gain = args.std_gain
+        self.init_kind = args.init_kind
+        self.initializer = tf.keras.initializers.RandomNormal()
+        self.conv_params =dict(kernel_size=(3,3), padding='same',kernel_initializer=self.initializer, activation='relu',use_bias=False)
+        self.use_resnet = True
+
+    def double_conv_block(self,tensor,filters,use_resnet=True,kernel=(3,3)):
+        x = Convolution2D(filters,  # grab last filter-count
+                           kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                           **self.conv_params)(tensor)
+        tensor = BatchNormalization()(x)
+        tensor = Convolution2D(filters,  # grab last filter-count
+                           kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                           **self.conv_params)(tensor)
+        tensor = BatchNormalization()(tensor)
+        tensor = Convolution2D(filters,  # grab last filter-count
+                           kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                           **self.conv_params)(tensor)
+        if self.use_dropout:
+            tensor = SpatialDropout2D(self.dropout)(tensor)
+        tensor = BatchNormalization()(tensor)
+        if use_resnet:
+            tensor = layers.add([x, tensor])
+        return tensor
+
+    def output_block(self,tensor, nclasses, activation=None,kernel=(1,1), name='output'):
+        if activation is None:
+            activation = self.activation
+        tensor = Convolution2D(nclasses,  # grab last filter-count
+                           kernel_size=kernel,
+                           padding='same',
+                           kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                           activation=activation,name=name)(tensor)
+        return tensor
+
+    def conv_chain_down(self,tensor):
+        filters = self.filters[:-1]
+        for idx, f in enumerate(filters):
+            if idx == 0:
+                self.use_resnet = False
             else:
-                return( MSE_n / MSE_n_ref )
-        else:
-            return (MSE_n / (MSE_n_ref + my_epsilon) )
-    return my_FSS_loss
+                self.use_resnet = True
+            tensor = self.double_conv_block(tensor,f,self.use_resnet)
+            self.tensor_list.append(tensor)  # for use in skip
+            # use convolution to stride down and reduce dimension by 2
+            if not self.use_pooling:
+                tensor = Convolution2D(f, strides=(2,2), **self.conv_params)(tensor)
+            else:
+                tensor = AveragePooling2D(
+                    pool_size=(
+                        2, 2), strides=(
+                        2, 2), padding='same')(tensor)
+            tensor = BatchNormalization()(tensor)
+        return tensor
 
-
-def root_mean_squared_error(y_true, y_pred):
-        return K.sqrt(K.mean(K.square(y_pred - y_true))) 
-
-def customMSE(y_true, y_pred):
-    '''
-    Correct predictions of 0 do not affect performance.
-    Performance is affected only by predictions where y_true > 20
-    '''
-    loss = tf.square(y_true - y_pred)
-    # ignore elements where BOTH y_true & y_pred < 0.1
-    mask = tf.cast(tf.logical_or(y_true >= thres, y_pred >= thres) ,tf.float32)
-    loss *= mask
-    return loss
-
-def alt_unet(input_shape,nclasses=1,dropout=None,l=None):
-
-    input_tensor = Input(shape=input_shape, name="input")
-
-
-    x = layers.Conv2D(64, 1, strides=2, padding="same")(input_tensor)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation("relu")(x)
-
-    previous_block_activation = x
-
-    for filters in [128]:
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.AveragePooling2D(3, strides=2, padding="same")(x)
-
-        # Project residual
-        residual = layers.Conv2D(filters, 1, strides=2, padding="same", kernel_regularizer=l2(l), bias_regularizer=l2(l))(
-            previous_block_activation
-        )
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x  # Set aside next residual
-
-    ### [Second half of the network: upsampling inputs] ###
-
-    for filters in [128, 64]:
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same", kernel_regularizer=l2(l), bias_regularizer=l2(l))(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same", kernel_regularizer=l2(l), bias_regularizer=l2(l))(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.UpSampling2D(2)(x)
-
-        # Project residual
-        residual = layers.UpSampling2D(2)(previous_block_activation)
-        residual = layers.Conv2D(filters, 1, padding="same",kernel_regularizer=l2(l), bias_regularizer=l2(l))(residual)
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x  # Set aside next residual
-
-    # Add a per-pixel classification layer
-    output_tensor = layers.Conv2D(nclasses, 1, activation="relu", padding="same",name='output')(x)
-
-    opt = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999,
-                                 epsilon=None, decay=0.0, amsgrad=False)
-
-    # Define the model
-    model = keras.Model(inputs=input_tensor, outputs=output_tensor)
-
-    model.compile(optimizer=opt, loss='mse')
-
-    return model
-
-
-def keras_custom_loss_function(y_true, y_pred):
-    # custom loss function - penalize early on, otherwise leave alone
-    loss = np.mean(np.sum(np.square((y_true - y_pred)/10)))
-    return loss
-
-
-def create_seq(input_shape, nclasses, filters=[30,45,60], 
-                   lambda_regularization=None, activation='elu'):
-    # A sequential model for semantic reasoning
-
-    if lambda_regularization is not None:
-        lambda_regularization = keras.regularizers.l2(lambda_regularization)
+    def conv_chain_up(self,tensor):
+        filters = list(reversed(self.filters[:-1]))        
+        for idx, f in enumerate(filters):
+            if self.use_transpose:
+                tensor = Conv2DTranspose(f, **self.transpose_params)(tensor)
+            else:
+                tensor = UpSampling2D(size=2)(tensor)  # increase dimension
+                tensor = Convolution2D(f, **self.conv_params)(tensor)
+            if self.junction == 'Add':
+                print(self.tensor_list)
+                popped_tensor = self.tensor_list.pop()
+                tensor = Add()([tensor, popped_tensor])  # skip connection
+            else:
+                tensor = Concatenate()([tensor, self.tensor_list.pop()])
+            tensor = self.double_conv_block(tensor,f)
+            if self.use_dropout:
+                tensor = SpatialDropout2D(self.dropout)(tensor)
+            tensor = BatchNormalization()(tensor)
+        return tensor
     
-    tensor_list = []
-    input_tensor = Input(shape=input_shape, name="input")
-
-    # 256x256
+    def preprocess(self, tensor):
+        tensor = RandomTranslation(height_factor=self.translation_factor, width_factor=self.translation_factor)
+        tensor = GaussianNoise(self.gauss_factor)(tensor)
+        return tensor # you could just keep an updating self.tensor object as you go
+        # if p > 0.5:
+        #     return RandomTranslation(height_factor=self.trans_factor)(tensor)
+        # else:
+        #     return RandomTranslation(height_factor=0,width_factor=self.trans_factor)
         
-    tensor = Convolution2D(filters[0],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(input_tensor)
+    def build_model(self):
+        print('building model')
+        input_tensor = Input(self.input_shape, name='input')
+        tensor = BatchNormalization()(input_tensor)
+        tensor = GaussianNoise(0.1)(tensor)
+        tensor = RandomTranslation(self.args.t_fac, self.args.t_fac)(tensor)
+        self.set_conv_params()
+        tensor = self.conv_chain_down(tensor)
+        tensor = self.double_conv_block(tensor, self.filters[-1])
+        tensor = self.double_conv_block(tensor, self.filters[-1])
+        tensor = self.conv_chain_up(tensor)
+        output_tensor = self.output_block(tensor,nclasses=1)
+        model = Model(inputs=input_tensor, outputs=output_tensor)
+        self.model = model # save model as attribute of UNet
+        print('built the model',model.summary())
+        print(self.gain,self.std_gain,self.bias)
+        return model
     
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
+    def build_tuning_model(self, hp):
+        self.set_tuning_parameters(hp)
+        self.set_conv_params()
+        print('building tuning model')
+        self.build_model()
+        self.compile_model()
+        return self.model
+        
+    def set_tuning_parameters(self, hp):
+        self.translation_factor = hp.Float('translation_factor', min_value=0.0, max_value=0.6, step=0.2) # will it just
+        self.gauss_factor = hp.Float('gauss_factor', min_value=0.0, max_value=1.0, step=0.25)
+        self.depth = hp.Int('depth',min_value=2,max_value=3,step=1)
+        self.junction =  hp.Choice('junction', ['Add', 'Concatenate'])
+       # self.gain = hp.Choice('initializer_gain', [0.05,0.1,0.5,0.7,0.9])
+       # self.std_gain = hp.Choice('multiple_std', [1,2,4,5,7,9])
+       # self.bias = hp.Choice('bias_value', [0.05,0.1,0.5])
+        self.dropout = hp.Float('dropout', min_value=0.0, max_value=0.6, step=0.2)
+        self.L2 = hp.Float('L2', min_value=0.0, max_value=0.6, step=0.2)
+        self.filters = []
+        for idx in np.arange(self.depth):
+            imin =idx+1
+            imax=idx+3
+            f = hp.Int(f'layer_{idx}_filters', min_value=16*imin, max_value=32*imax, step=16)
+            self.filters.append(f)
+        #activation = hp.Choice('activation', ['swish','lrelu','linear'])
 
+    def set_conv_params(self):
+        if self.init_kind == 'Normal':
+            self.initializer = tf.keras.initializers.RandomNormal(mean=self.gain, stddev=0.05*self.std_gain)
+        elif self.init_kind == 'Uniform':
+            self.initializer = tf.keras.initializers.RandomUniform(minval=-0.1*self.gain, maxval=0.1*self.gain)
+        self.conv_params = dict(kernel_size=(3,3), padding='same',kernel_initializer=self.initializer, activation=self.activation, bias_initializer=tf.constant_initializer(self.bias))
 
-    tensor = Convolution2D(filters[2],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    tensor = Convolution2D(filters[2],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
-    
-    tensor = Convolution2D(filters[1],
-                          kernel_size=(3,3),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation=activation)(tensor)
+    def compile_model(self):
+        self.set_optimizer()
+        print('metrics follow',self.metrics_fncts)
+        print(self.loss_function)
+        self.model.compile(loss=self.loss_function,optimizer=self.optimizer,metrics=self.metrics_fncts, run_eagerly=True)
+        #loaded_model = keras.models.load_model('my_model')
+        #self.model = loaded_model.compile(loss=self.loss_fn,optimizer=self.optimizer,metrics=self.metrics_fncts, run_eagerly=True)
+        return self.model
 
-    #############################        
-    output_tensor = Convolution2D(nclasses,
-                          kernel_size=(1,1),
-                          padding='same', 
-                          use_bias=True,
-                          kernel_initializer='random_uniform',
-                          bias_initializer='zeros',
-                          kernel_regularizer=lambda_regularization,
-                          activation='sigmoid',name='output')(tensor)
-    
-    
+    def set_loss(self,loss_fn='mse'):
+        self.loss_fn = loss_fn
+        if loss_fn != 'mse' and loss_fn != 'bce':
+            print('inside the set_loss method',loss_fn)
+            function = getattr(loss_functions, str(loss_fn))
+            fnct = function(scaler=self.dataset.ytr_scalers[0])
+            self.custom_objects[loss_fn] = fnct
+            self.loss_function = fnct
+            print(self.custom_objects)
+        elif loss_fn == 'bce':
+            self.dataset.binarize_y()
+            self.loss_function = tf.keras.losses.BinaryCrossentropy()
 
-    model = Model(inputs=input_tensor, outputs=output_tensor)
-    opt = keras.optimizers.Adam(lr=0.01, beta_1=0.9, beta_2=0.999, 
-                                    epsilon=None, decay=0.0, amsgrad=False)
-    model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=opt,
-                 metrics=["binary_accuracy"])
-    
-    return model
+        else:
+            self.loss_function=loss_fn
+
+    def set_optimizer(self):
+        self.optimizer = tf.keras.optimizers.Adam(lr=0.001)
+
+    def set_metrics(self,metrics_names=['POD','FAR']):
+        print('Setting metrics')
+        if self.loss_fn != 'bce':
+            for metric in metrics_names:
+                function = getattr(metrics, metric)
+                fnct = function()
+                self.metrics_fncts.append(fnct)
+                self.custom_objects[metric] = fnct
+        else:
+            self.metrics_fncts.append('binary_accuracy')
+
+    def set_activation(self,name='lrelu'):
+        def lrelu(x): return tf.keras.activations.relu(x, alpha = 0.1)
+        def linear(x): return tf.keras.activations.linear(x)
+        def swish(x): return tf.keras.activations.swish(x)
+        def sigmoid(x): return tf.keras.activations.sigmoid(x)
+        activations = dict(lrelu=lrelu, linear=linear, swish=swish, sigmoid=sigmoid)
+        self.activation = activations[name]
+        self.custom_objects[name] = self.activation
+
