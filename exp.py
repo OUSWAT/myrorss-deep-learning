@@ -104,7 +104,7 @@ class Experiment():
             note=self.args.note
             transpose = self.args.use_transpose
             resnet = self.args.use_resnet
-            prefix = f'loss-{self.args.loss}_dataset-{self.args.ID}_L2-{self.args.L2}_drop-{self.args.dropout}_junct-{self.args.junction}_filters-{filters_str}_act-{self.args.activation}_cut-{cut}_transpose-{transpose}_resnet-{resnet}_note-{note}'
+            prefix = f'loss-{self.args.loss}_dataset-{self.args.ID}_L2-{self.args.L2}_drop-{self.args.dropout}_junct-{self.args.junction}_filters-{filters_str}_act-{self.args.activation}_cut-{cut}_transpose-{transpose}_resnet-{resnet}_init-{self.args.init_kind}'
         self.prefix = prefix
         return prefix
 

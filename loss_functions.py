@@ -213,41 +213,6 @@ def PHDK(scaler,cutoff=20, cutoff_distance=10, reward=10, k=10):
         return MSE + loss
     return phdk
 
-def find_min_distances(coord_X_A_TA, coord_Y_A_TA, coord_X_B_TA, coord_Y_B_TA, is_delta=False):
-    # i.e. MED
-    # mindistances from A to B
-    X_A = tf.map_fn(fn=lambda x: x, elems=coord_X_A_TA.read(0))
-    Y_A = tf.map_fn(fn=lambda x: x, elems=coord_Y_A_TA.read(0))
-    X_B = tf.map_fn(fn=lambda x: x, elems=coord_X_B_TA.read(0))
-    Y_B = tf.map_fn(fn=lambda x: x, elems=coord_Y_B_TA.read(0))
-    # get the first value of each tensor 
-    distances_TA = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True) 
-    idx2 = 0
-    for idx in tf.range(len(X_A)): # for delta, should be 0 to 59
-        x_A = X_A[idx] # 0
-        y_A = Y_A[idx] # 0
-        mindist=1000
-        for idx2 in tf.range(X_B.shape[0]): # if nothin in A, this will throw an error
-            y_B = X_B[idx2]
-            x_B = Y_B[idx2]
-            diff_X = tfm.subtract(x_A,x_B)
-            diff_Y = tfm.subtract(y_A,y_B)
-            dist = tfm.sqrt(tfm.square(diff_X) + tfm.square(diff_Y))
-            if dist < min_dist:
-                min_dist = dist
-        distances_TA.write(distances_TA.size(), dist)
-    return distances_TA 
-
-def find_coord(indices,length=60):
-    length = length # to the square root of the second dimension of shape
-    # initialize TAs
-    indices = tf.map_fn(fn=lambda x: x, elems=indices)
-    coord_X_TA = tf.TensorArray(tf.float32, size=0, dynamic_size=True,clear_after_read=False)
-    coord_Y_TA = tf.TensorArray(tf.float32, size=0, dynamic_size=True,clear_after_read=False)
-    coordx = [indices[idx]//length for idx in tf.range(indices.shape[0])] # this could be reduced to one step but let's keep it simple
-    coordy = [indices[idx]%length for idx in tf.range(indices.shape[0])]
-    return coord_X_TA, coord_Y_TA
-
 
 
 def get_dist_at_k(dists, k):
@@ -396,7 +361,7 @@ def G(scaler, cutoff=15, min_N=6):
         return loss
     return g
 
-def mse(y_true, y_pred):
+def MSE(y_true, y_pred):
     return tf.reduce_mean(tfm.square(tfm.subtract(y_true,y_pred)))
 
 def avgMED(scaler, cutoff=20, min_N=30,c=3):
@@ -406,7 +371,7 @@ def avgMED(scaler, cutoff=20, min_N=30,c=3):
         MSE = tf.reduce_mean(tf.square(y_true-y_pred))
         y_true = tf.reshape(y_true, shape=(tf.shape(y_true)[0], -1))
         y_pred = tf.reshape(y_pred, shape=(tf.shape(y_pred)[0], -1))
-        loss, loss_med = tf.cast(0,dtype=tf.float32), tf.cast(0,dtype=tf.float32)
+        loss, loss_med = tf.cast([0],dtype=tf.float32), tf.cast([0],dtype=tf.float32)
         # rescale
         y_true = y_true*scaler.scale_
         y_true = y_true+scaler.mean_
@@ -424,8 +389,11 @@ def avgMED(scaler, cutoff=20, min_N=30,c=3):
             pred = tf.where(pred<cutoff,0.0,1.0)
             n_true = tf.reduce_sum(true)
             n_pred = tf.reduce_sum(pred)
-            loss_TA = tf.cond(tf.logical_or(n_true < min_nonzero_pixels, n_pred < min_nonzero_pixels), get_zero(true,pred), get_MED(true,pred))
-            loss_med += loss_TA.read(0)
+            loss_TA = tf.cond(tf.logical_or(n_true < min_nonzero_pixels, n_pred < min_nonzero_pixels), lambda: get_zero(true,pred), lambda: get_MED(true,pred))
+            try:
+                loss_med += loss_TA.read(0)
+            except:
+                loss_med += 0
             loss += loss_med + MSE # do we benefit from reducing across the batch dimension? we should be able to look at familiar batches and see the little increase due to the distance component
             tf.print(n_true,n_pred)
             tf.print(loss_med)
@@ -434,9 +402,9 @@ def avgMED(scaler, cutoff=20, min_N=30,c=3):
 
 def get_MED(A,B):
     # takes in binary tensors
-    indices_A, indices_B = tf.where(A), tf.where(B)
-    coordX_A_TA, coordY_A_TA = find_coord(indices_A)
-    coordX_B_TA, coordY_B_TA = find_coord(indices_B)
+    tf.print('in MED')
+    coordX_A_TA, coordY_A_TA = find_coord(A)
+    coordX_B_TA, coordY_B_TA = find_coord(B)
     mindists_AB_TA = find_min_distances(coordX_A_TA, coordY_A_TA, coordX_B_TA, coordY_B_TA)
     mindists_BA_TA = find_min_distances(coordX_B_TA, coordY_B_TA, coordX_A_TA, coordY_A_TA)
     # MED = mean error distance = 
@@ -444,12 +412,60 @@ def get_MED(A,B):
     med_BA = tf.reduce_mean(mindists_BA_TA.read(0))
     avg_med = tfm.divide(tfm.add(med_AB,med_BA),tf.constant(0.5))
     loss_TA = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-    loss_TA.write(loss_TA.size(), avg_med)
+    loss_TA = loss_TA.write(loss_TA.size(), avg_med)
     return loss_TA 
 
+def find_coord(A,length=60):
+    length = length # to the square root of the second dimension of shape
+    # initialize TAs
+    indices = tf.where(A)
+    indices = tf.map_fn(fn=lambda x: x, elems=indices)
+    coord_X_TA = tf.TensorArray(tf.float32, size=0, dynamic_size=True,clear_after_read=False)
+    coord_Y_TA = tf.TensorArray(tf.float32, size=0, dynamic_size=True,clear_after_read=False)
+    coord_X, coord_Y = [], []
+    for idx in tf.range(len(indices)):
+        # get the first value of each tensor 
+        x = float(indices[idx] % length)
+        y = float(indices[idx] // length)
+        coord_X_TA = coord_X_TA.write(coord_X_TA.size(), x)
+        coord_Y_TA = coord_Y_TA.write(coord_Y_TA.size(), y)
+    return coord_X_TA, coord_Y_TA
+
+def find_min_distances(coord_X_A_TA, coord_Y_A_TA, coord_X_B_TA, coord_Y_B_TA, is_delta=False):
+    # i.e. MED
+    # mindistances from A to B
+    X_A = tf.map_fn(fn=lambda x: x, elems=coord_X_A_TA.read(0))
+    Y_A = tf.map_fn(fn=lambda x: x, elems=coord_Y_A_TA.read(0))
+    X_B = tf.map_fn(fn=lambda x: x, elems=coord_X_B_TA.read(0))
+    Y_B = tf.map_fn(fn=lambda x: x, elems=coord_Y_B_TA.read(0))
+    # get the first value of each tensor 
+    distances_TA = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True) 
+    idx2 = 0
+    min_dist = 1000.0
+    dist = tf.constant(0,tf.float32)
+    for idx in tf.range(len(X_A)): # for delta, should be 0 to 59
+        x_A = X_A[idx] # 0
+        y_A = Y_A[idx] # 0
+        mindist=1000.0
+        for idx2 in tf.range(X_B.shape[0]): # if nothin in A, this will throw an error
+            y_B = X_B[idx2]
+            x_B = Y_B[idx2]
+            diff_X = tfm.subtract(x_A,x_B)
+            diff_Y = tfm.subtract(y_A,y_B)
+            dist = tfm.sqrt(tfm.square(diff_X) + tfm.square(diff_Y))
+            if dist < min_dist:
+                min_dist = dist
+        distances_TA = distances_TA.write(distances_TA.size(), dist)
+    return distances_TA 
+
 def get_zero(A,B):
-    loss_TA = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-    loss_TA.write(loss_TA.size(), 0)
+    tf.print('in zero')
+    loss_TA = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True, clear_after_read=False)
+    tf.print(f'loss_TA before writing {loss_TA}')
+    loss_TA = loss_TA.write(loss_TA.size(), 0.0) # write a single 0 to loss_TA
+    tf.print(f'loss_TA after writing {loss_TA}')
+    print(loss_TA.size())
+    tf.print(loss_TA.size())
     return loss_TA
 
 def get_n_AB(A,B,cutoff):

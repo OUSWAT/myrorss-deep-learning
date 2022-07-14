@@ -45,7 +45,7 @@ class Run(object):
         
     def save_results(self):
         if self.args.model_name != 'None':
-            prefix = f'{self.args.model_name}_{args.loss}-{self.args.omega}'
+            prefix = f'{self.args.model_name}_{self.args.loss}-{self.args.omega}_epochs-{self.args.epochs}'
         else:
             prefix = self.exp.gen_filename()
         self.exp.model.save(f'models/{prefix}.h5')
@@ -69,7 +69,7 @@ class Run(object):
         results['fname_base'] = prefix
         fp = open(f"results/{prefix}_results.pkl", "wb")
         pickle.dump(results, fp)
-        print(f"results/{prefix}_results.pkl")
+        print(f"results/{self.args.savedir}/{prefix}_results.pkl")
     
 
 def main():
@@ -85,6 +85,11 @@ def create_parser():
         '-model_name',
         type=str,
         default='None')
+    parser.add_argument(
+        '-savedir',
+        type=str,
+        default='lr0.001',
+        help='Dir to save results in (results/savedir/etc')
     parser.add_argument(
         '-use_resnet',
         type=int,

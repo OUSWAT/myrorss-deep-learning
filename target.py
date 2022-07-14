@@ -32,16 +32,16 @@ class Target(object):
  
     def check_MESH(self):
         var = self.read_netcdf(self.target_path)
-        cond1 = points_above(var, 30) > 20
-        cond2 = points_above(var, 40) > 10
-        cond3 = points_above(var, 55) > 5
-        if cond1 and cond2 and cond3:
+        cond1 = points_above(var, 30) > 10
+        cond2 = points_above(var, 40) > 2
+        print(f'{cond1} {cond2}')
+        #cond3 = points_above(var,50) > 1
+        if cond1 and cond2:
             return True
         else:
             return False
 
     def gather_ins(self):
-        print('beginning to gather')
         # field must be of format '{field}/{subdir}'
         for field in s.fields_10min:
             key = field
@@ -79,7 +79,6 @@ class Target(object):
 
     def load_npy(self):
         for key, value in self.ins.items():
-            print(key)
             if isinstance(value, tuple):
                 value = value[0]
             self.ins_list.append(self.read_netcdf(value))

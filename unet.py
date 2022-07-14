@@ -1,12 +1,11 @@
 # Author: Michael Montalbano
 # Create U-Network or Autoencoder
 
-from turtle import xcor
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers import GaussianNoise, AveragePooling2D, SpatialDropout2D, BatchNormalization, Convolution2D, Dense, MaxPooling2D, Flatten, BatchNormalization, Dropout, Concatenate, Input, UpSampling2D, Add
-from tensorflow.keras.layers import Conv2DTranspose, RandomTranslation
+from tensorflow.keras.layers import Conv2DTranspose, RandomTranslation, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras import backend as K
@@ -17,7 +16,6 @@ import metrics
 import loss_functions
 import random
 import keras_tuner as kt
-from blocks import resnet_block
 
 class UNet(object):
     def __init__(self, args, dataset, input_shape=(60,60,41)):
@@ -53,10 +51,7 @@ class UNet(object):
         self.use_resnet = True
 
     def double_conv_block(self,tensor,filters,use_resnet=True,kernel=(3,3)):
-        x = Convolution2D(filters,  # grab last filter-count
-                           kernel_regularizer=tf.keras.regularizers.l2(self.l2),
-                           **self.conv_params)(tensor)
-        tensor = BatchNormalization()(x)
+        # vanilla unet block
         tensor = Convolution2D(filters,  # grab last filter-count
                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
                            **self.conv_params)(tensor)
@@ -67,8 +62,6 @@ class UNet(object):
         if self.use_dropout:
             tensor = SpatialDropout2D(self.dropout)(tensor)
         tensor = BatchNormalization()(tensor)
-        if use_resnet:
-            tensor = layers.add([x, tensor])
         return tensor
 
     def output_block(self,tensor, nclasses, activation=None,kernel=(1,1), name='output'):
@@ -84,11 +77,7 @@ class UNet(object):
     def conv_chain_down(self,tensor):
         filters = self.filters[:-1]
         for idx, f in enumerate(filters):
-            if idx == 0:
-                self.use_resnet = False
-            else:
-                self.use_resnet = True
-            tensor = self.double_conv_block(tensor,f,self.use_resnet)
+            tensor = self.double_conv_block(tensor,f)
             self.tensor_list.append(tensor)  # for use in skip
             # use convolution to stride down and reduce dimension by 2
             if not self.use_pooling:
@@ -115,7 +104,7 @@ class UNet(object):
                 tensor = Add()([tensor, popped_tensor])  # skip connection
             else:
                 tensor = Concatenate()([tensor, self.tensor_list.pop()])
-            tensor = self.double_conv_block(tensor,f)
+            tensor = self.batchnorm_block(tensor,f)
             if self.use_dropout:
                 tensor = SpatialDropout2D(self.dropout)(tensor)
             tensor = BatchNormalization()(tensor)
@@ -138,8 +127,8 @@ class UNet(object):
         tensor = RandomTranslation(self.args.t_fac, self.args.t_fac)(tensor)
         self.set_conv_params()
         tensor = self.conv_chain_down(tensor)
-        tensor = self.double_conv_block(tensor, self.filters[-1])
-        tensor = self.double_conv_block(tensor, self.filters[-1])
+        tensor = self.batchnorm_block(tensor, self.filters[-1])
+        tensor = self.batchnorm_block(tensor, self.filters[-1])
         tensor = self.conv_chain_up(tensor)
         output_tensor = self.output_block(tensor,nclasses=1)
         model = Model(inputs=input_tensor, outputs=output_tensor)
@@ -183,8 +172,6 @@ class UNet(object):
 
     def compile_model(self):
         self.set_optimizer()
-        print('metrics follow',self.metrics_fncts)
-        print(self.loss_function)
         self.model.compile(loss=self.loss_function,optimizer=self.optimizer,metrics=self.metrics_fncts, run_eagerly=True)
         #loaded_model = keras.models.load_model('my_model')
         #self.model = loaded_model.compile(loss=self.loss_fn,optimizer=self.optimizer,metrics=self.metrics_fncts, run_eagerly=True)
@@ -228,4 +215,68 @@ class UNet(object):
         activations = dict(lrelu=lrelu, linear=linear, swish=swish, sigmoid=sigmoid)
         self.activation = activations[name]
         self.custom_objects[name] = self.activation
+
+    def conditional_UNet(self):
+        # build the model
+        self.build_model()
+        generator = self.model
+
+    def output_block(self,tensor, nclasses, activation=None,kernel=(1,1), name='output'):
+        if activation is None:
+            activation = self.activation
+        tensor = Convolution2D(nclasses,  # grab last filter-count
+                            kernel_size=kernel,
+                            padding='same',
+                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                            activation=activation,name=name)(tensor)
+        return tensor
+
+
+    def batchnorm_block(self,tensor,filters,kernel=(3,3)):
+        # This block adheres to  Ioffe and Szegedy 2015, doing batch norm before the activation
+        # also uses resnet style skip connections within the block 
+        self.conv_params = dict(kernel_size=(3,3), padding='same',kernel_initializer=self.initializer, bias_initializer=tf.constant_initializer(self.bias),activation=None) # set activation off
+        x = Convolution2D(filters,  # grab last filter-count
+                                kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                                **self.conv_params)(tensor)
+        x = BatchNormalization()(x)
+        x = LeakyReLU()(x)
+        tensor = Convolution2D(filters,  # grab last filter-count
+                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                            **self.conv_params)(x)
+        tensor = BatchNormalization()(tensor)
+        # do a leaky relu on the tensor
+        tensor = LeakyReLU()(tensor)
+        tensor = Convolution2D(filters,  # grab last filter-count
+                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                            **self.conv_params)(tensor)
+        if self.use_dropout:
+            tensor = SpatialDropout2D(self.dropout)(tensor)
+        tensor = BatchNormalization()(tensor)
+        tensor = LeakyReLU()(tensor)
+        tensor = Add()([tensor, x])  # skip connection
+        return tensor
+
+    def resnet_block(self,tensor,filters,kernel=(3,3)):
+        # Conv -> Activation -> BN
+        # also uses resnet style skip connections within the block 
+        x = Convolution2D(filters,  # grab last filter-count
+                                kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                                **self.conv_params)(tensor)
+        x = BatchNormalization()(x)
+        tensor = Convolution2D(filters,  # grab last filter-count
+                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                            activation=None)(x)
+        tensor = BatchNormalization()(tensor)
+        # do a leaky relu on the tensor
+        tensor = Convolution2D(filters,  # grab last filter-count
+                            kernel_regularizer=tf.keras.regularizers.l2(self.l2),
+                            **self.conv_params)(tensor)
+        if self.use_dropout:
+            tensor = SpatialDropout2D(self.dropout)(tensor)
+        tensor = BatchNormalization()(tensor)
+        tensor = Add()([tensor, x])  # skip connection
+        return tensor
+
+
 
